@@ -6,7 +6,7 @@ import TermsPaper, { Blank, type PaperPerson } from "@/components/terms/TermsPap
 import { isScottish } from "@/lib/property-flags";
 import { signatureFromPhoto } from "@/lib/terms/signature-photo";
 import { edition, editionFor } from "@/lib/terms/catalogue";
-import { guessService, servicesFor } from "@/lib/terms/services";
+import { guessService, NO_RLP, rlpIncludedIn, serviceOfTerms, servicesFor } from "@/lib/terms/services";
 import type { Country, LandlordDetails, TermsValues } from "@/lib/terms/types";
 import { regForLandlords, type HomeReg } from "@/lib/reg-numbers";
 import QuestionField from "@/components/terms/QuestionField";
@@ -225,6 +225,7 @@ export default function TermsSendScreen({
   editions,
   registration = null,
   asks = false,
+  rlp = false,
   pack = false,
   preview,
   onClose,
@@ -237,6 +238,12 @@ export default function TermsSendScreen({
    * landlord".
    */
   asks?: boolean;
+  /**
+   * The managed service with or without Rent & Legal Protection (switch "tobrlp", Susan Liles,
+   * ticket 198f8ba9, 24 Nov 2026). Passed in rather than asked here, so the service the screen
+   * opens on is right first time.
+   */
+  rlp?: boolean;
   /** From Prepare and Send: the appraisal's landlord gets the presentation in the same email. */
   pack?: boolean;
   /** A service just chosen on the home's page ("Managed", "Let Only", "Rent Collect"): it wins over the record's and the set being adjusted. */
@@ -347,15 +354,15 @@ export default function TermsSendScreen({
   const base = signing ?? from;
   /* Opened from a change of service on the home's page (2 Nov 2026): that service is chosen,
      with its own standard fees unless the set being adjusted is already on it. */
-  const wanted = !signing && serviceWanted ? guessService(country, serviceWanted) : null;
-  const start = wanted ?? ((base && servicesFor(country).find((o) => o.label === base.values.serviceLevel)) || guessService(country, base?.values.serviceLevel ?? serviceOnRecord));
-  const feesFromBase = !wanted || base?.values.serviceLevel === wanted.label;
+  const wanted = !signing && serviceWanted ? guessService(country, serviceWanted, rlp) : null;
+  const start = wanted ?? (serviceOfTerms(country, base?.values, rlp) || guessService(country, base?.values.serviceLevel ?? serviceOnRecord, rlp));
+  const feesFromBase = !wanted || base?.values.serviceLevel === wanted.label || (wanted.id === NO_RLP && rlpIncludedIn(base?.values) === true);
   const [service, setService] = useState(start.id);
   const [setUpFee, setSetUpFee] = useState((feesFromBase ? base?.values.setUpFee ?? feesOnRecord?.setUpFee : null) ?? start.setUpFee);
   const [managementFee, setManagementFee] = useState((feesFromBase ? base?.values.managementFee ?? feesOnRecord?.managementFee : null) ?? start.managementFee);
   const [additional, setAdditional] = useState(base && base.values.additionalFees !== "None" ? base.values.additionalFees : "");
   const [larn, setLarn] = useState(base && base.values.agentLarn !== "Not recorded" ? base.values.agentLarn : agentLarn ?? "");
-  const serviceLabel = servicesFor(country).find((o) => o.id === service)?.label ?? service;
+  const serviceLabel = servicesFor(country, rlp).find((o) => o.id === service)?.label ?? service;
 
   /* One part of step 1 open for changing at a time; who signs starts open when we don't know them well enough to send. */
   type Part = "people" | "property" | "country" | "fees" | "larn";
@@ -596,7 +603,7 @@ export default function TermsSendScreen({
 
   const setPerson = (i: number, patch: Partial<Person>) => setPeople((ps) => ps.map((p, j) => (j === i ? { ...p, ...patch } : p)));
   const pickService = (id: string) => {
-    const o = servicesFor(country).find((x) => x.id === id);
+    const o = servicesFor(country, rlp).find((x) => x.id === id);
     setService(id);
     if (o) {
       setSetUpFee(o.setUpFee);
@@ -742,6 +749,7 @@ export default function TermsSendScreen({
         agentLarn: larn.trim() || "Not recorded",
         propertyAddress: address.trim(),
         serviceLevel: serviceLabel,
+        ...(rlp ? { serviceId: service } : {}),
         setUpFee: setUpFee.trim(),
         managementFee: managementFee.trim(),
         additionalFees: additional.trim() || "None",
@@ -824,6 +832,7 @@ export default function TermsSendScreen({
         propertyAddress: address,
         agentLarn: larn,
         serviceLevel: serviceLabel,
+        ...(rlp ? { serviceId: service } : {}),
         setUpFee,
         managementFee,
         additionalFees: additional,
@@ -1051,7 +1060,7 @@ export default function TermsSendScreen({
             Service
             <div className="ac">
               <select value={service} onChange={(e) => pickService(e.target.value)}>
-                {servicesFor(country).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                {servicesFor(country, rlp).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
               </select>
             </div>
           </label>

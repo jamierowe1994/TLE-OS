@@ -110,6 +110,8 @@ export type PackContext = {
   guarantorReport: boolean;
   /** A guarantor's AML check is filed on the pack. Unset when not known (the bench). */
   guarantorAml?: boolean;
+  /** Ask the reader about Susan's checklist lines too (switch "plclines", 24 Nov 2026). */
+  linesOn?: boolean;
 };
 
 export const NO_PACK: PackContext = { scottish: false, guarantorReport: false };

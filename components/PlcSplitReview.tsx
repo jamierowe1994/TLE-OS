@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CopyButton } from "@/components/Bits";
 import DoodleIcon from "@/components/DoodleIcon";
 import { api, ComplianceSide, Head, Note, prettyDate, prettyWhen, TenantAnswersBody, useTenantAnswers, type Loaded } from "@/components/PlcReview";
-import { CHECK_GROUPS, docTitle, gateOf, tickHolds, type Check, type CheckId, type PlcAiSummary, type PlcCase, type PlcDocument, type PlcTick } from "@/lib/plc";
+import { CHECK_GROUPS, checkLabel, docTitle, gateOf, linesFor, tickHolds, visibleChecks, type Check, type CheckId, type PlcAiSummary, type PlcCase, type PlcDocument, type PlcLine, type PlcLineAnswer, type PlcNote, type PlcTick } from "@/lib/plc";
 import type { TenantAnswers } from "@/lib/plc-tenant-answers";
 
 /**
@@ -54,10 +54,13 @@ const filesOn = (c: PlcCase, id: CheckId) => c.documents.filter((d) => d.checkId
 function checksFor(group: Group, data: Loaded): Check[] {
   const ids = CHECK_GROUPS.find((g) => g.id === group)?.checks ?? [];
   const c = data.case;
-  const list = data.checks.filter((k) => ids.includes(k.id) || (group === "landlord" && k.id === "other"));
+  const linesOn = data.linesOn === true;
+  const list = visibleChecks(data.checks, linesOn).filter((k) => ids.includes(k.id) || (group === "landlord" && k.id === "other"));
   return list.filter((k) => {
     const g = gateOf(k, c.letType);
     if (filesOn(c, k.id).length || (c.waivers ?? []).some((w) => w.checkId === k.id)) return true;
+    /* Registration has Susan's lines to answer even with nothing filed (24 Nov 2026). */
+    if (linesOn && k.id === "landlord-registration") return true;
     return g !== "optional" && g !== "after" && k.id !== "other";
   });
 }
@@ -96,6 +99,53 @@ export default function PlcSplitReview({
   const canWork = WITH_COMPLIANCE.includes(c.state);
 
   useEffect(() => setTicks(c.ticks ?? {}), [c.id, c.ticks]);
+
+  /* Notes on checks and Susan's lines (24 Nov 2026, ticket 668c196d). */
+  const [notes, setNotes] = useState<Record<string, PlcNote>>(c.notes ?? {});
+  const [lines, setLines] = useState<Record<string, PlcLineAnswer>>(c.lines ?? {});
+  useEffect(() => setNotes(c.notes ?? {}), [c.id, c.notes]);
+  useEffect(() => setLines(c.lines ?? {}), [c.id, c.lines]);
+  const linesOn = data.linesOn === true;
+  const pack = { nation: data.nation ?? null, rlpWanted: c.rlpWanted ?? null, lines };
+
+  const saveNote = async (key: string, text: string) => {
+    const before = notes;
+    const next = { ...notes };
+    if (text.trim()) next[key] = { text: text.trim(), by: "You", at: new Date().toISOString() };
+    else delete next[key];
+    setNotes(next);
+    if (sample) return;
+    try {
+      const r = await api<{ notes: Record<string, PlcNote> }>(`/api/plc/${encodeURIComponent(c.id)}/notes`, {
+        method: "POST",
+        body: JSON.stringify({ key, text }),
+      });
+      setNotes(r.notes);
+    } catch (e) {
+      setNotes(before);
+      say((e as Error).message);
+      throw e;
+    }
+  };
+
+  const answerLine = async (lineId: string, v: PlcLineAnswer["v"] | null) => {
+    const before = lines;
+    const next = { ...lines };
+    if (v === null) delete next[lineId];
+    else next[lineId] = { v, by: "You", at: new Date().toISOString() };
+    setLines(next);
+    if (sample) return;
+    try {
+      const r = await api<{ lines: Record<string, PlcLineAnswer> }>(`/api/plc/${encodeURIComponent(c.id)}/lines`, {
+        method: "POST",
+        body: JSON.stringify({ lineId, v }),
+      });
+      setLines(r.lines);
+    } catch (e) {
+      setLines(before);
+      say((e as Error).message);
+    }
+  };
 
   /* ── the people on the let ── */
   const [people, setPeople] = useState<PeopleState>({ people: sample?.people ?? [], problem: null, error: null, loading: !sample });
@@ -267,6 +317,12 @@ export default function PlcSplitReview({
                   <CheckRow
                     key={k.id}
                     check={k}
+                    label={checkLabel(k, linesOn)}
+                    lines={linesOn ? linesFor(k.id, pack) : []}
+                    answers={lines}
+                    notes={notes}
+                    onNote={saveNote}
+                    onLine={(id, v) => void answerLine(id, v)}
                     c={c}
                     tick={ticks[k.id]}
                     canWork={canWork}
@@ -300,6 +356,12 @@ export default function PlcSplitReview({
         <DocViewer
           doc={viewing.doc}
           check={data.checks.find((k) => k.id === viewing.checkId) ?? null}
+          label={(() => {
+            const k = data.checks.find((x) => x.id === viewing.checkId);
+            return k ? checkLabel(k, linesOn) : viewing.checkId;
+          })()}
+          note={notes[viewing.checkId]}
+          onNote={(text) => saveNote(viewing.checkId, text)}
           tick={ticks[viewing.checkId]}
           keys={filesOn(c, viewing.checkId).map((d) => d.key)}
           canWork={canWork}
@@ -403,6 +465,12 @@ function YesNo({ tick, keys, disabled, onTick, size = "sm" }: { tick: PlcTick | 
 
 function CheckRow({
   check,
+  label,
+  lines,
+  answers,
+  notes,
+  onNote,
+  onLine,
   c,
   tick,
   canWork,
@@ -412,6 +480,12 @@ function CheckRow({
   onUpload,
 }: {
   check: Check;
+  label: string;
+  lines: PlcLine[];
+  answers: Record<string, PlcLineAnswer>;
+  notes: Record<string, PlcNote>;
+  onNote: (key: string, text: string) => Promise<void>;
+  onLine: (lineId: string, v: PlcLineAnswer["v"] | null) => void;
   c: PlcCase;
   tick: PlcTick | undefined;
   canWork: boolean;
@@ -433,7 +507,7 @@ function CheckRow({
       <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
         <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${dot}`} />
         <div className="min-w-0 flex-1">
-          <p className="text-[13.5px] font-semibold text-ink">{check.label}</p>
+          <p className="text-[13.5px] font-semibold text-ink">{label}</p>
           {files.length === 0 ? (
             <p className="mt-0.5 text-[12.5px] text-muted">{waived ? `Not needed, says ${waived.by}: "${waived.reason}"` : "Nothing filed"}</p>
           ) : (
@@ -500,6 +574,17 @@ function CheckRow({
           )}
         </div>
       </div>
+      {/* Full width under the check, so a phone doesn't squeeze them beside the buttons (24 Nov 2026). */}
+      <div className="pl-[22px]">
+        <NoteBox note={notes[check.id]} canWork={canWork} ask={held?.ok === false} onSave={(t) => onNote(check.id, t)} />
+        {lines.length > 0 && (
+          <ul className="mt-2.5 space-y-2 border-l-2 border-line/70 pl-3" data-plc="lines">
+            {lines.map((l) => (
+              <LineRow key={l.id} line={l} answer={answers[l.id]} note={notes[l.id]} canWork={canWork} onAnswer={(v) => onLine(l.id, v)} onNote={(t) => onNote(l.id, t)} />
+            ))}
+          </ul>
+        )}
+      </div>
     </li>
   );
 }
@@ -509,6 +594,9 @@ function CheckRow({
 function DocViewer({
   doc,
   check,
+  label,
+  note,
+  onNote,
   tick,
   keys,
   canWork,
@@ -520,6 +608,9 @@ function DocViewer({
 }: {
   doc: PlcDocument;
   check: Check | null;
+  label: string;
+  note: PlcNote | undefined;
+  onNote: (text: string) => Promise<void>;
   tick: PlcTick | undefined;
   keys: string[];
   canWork: boolean;
@@ -553,7 +644,7 @@ function DocViewer({
           <div className="min-w-0 flex-1">
             <p className="truncate text-[15px] font-semibold text-ink">{docTitle(doc)}</p>
             <p className="truncate text-[12px] text-muted">
-              {check?.label ?? doc.checkId}
+              {label || check?.label || doc.checkId}
               {doc.read?.expiryDate ? ` · valid until ${prettyDate(doc.read.expiryDate)}` : ""} · {doc.addedBy}, {prettyDate(doc.addedAt)}
               {position ? ` · ${position}` : ""}
             </p>
@@ -599,6 +690,11 @@ function DocViewer({
           )}
         </div>
 
+        {(canWork || note) && (
+          <div className="border-t border-line/60 px-4 pb-1 sm:px-5">
+            <NoteBox note={note} canWork={canWork} ask={tickHolds(tick, keys) && tick?.ok === false} onSave={onNote} />
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-3 border-t border-line/60 px-4 py-3 sm:px-5">
           <span className="text-[13px] font-semibold text-ink">Is this right?</span>
           <YesNo tick={tick} keys={keys} disabled={!canWork} onTick={onTick} size="lg" />
@@ -613,5 +709,150 @@ function DocViewer({
         </div>
       </div>
     </div>
+  );
+}
+
+/* ──────────────────────────── notes and lines ──────────────────────────── */
+
+/**
+ * A note on a check or a line (Susan Liles, 24 Nov 2026: "Kirstie can't send
+ * me any notes from when she does the first PLC check"). Written where the
+ * checker is looking and read by the final approver in the same place. Saved
+ * when the box loses focus. `ask` is a No with no why yet: the box opens and
+ * says so, because the pack can't pass on with a bare No.
+ */
+export function NoteBox({ note, canWork, ask, onSave }: { note: PlcNote | undefined; canWork: boolean; ask?: boolean; onSave: (text: string) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(note?.text ?? "");
+  const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
+  const box = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    if (!editing) setDraft(note?.text ?? "");
+  }, [note?.text, editing]);
+  const open = editing || (ask && canWork && !note);
+
+  const save = async () => {
+    const text = draft.trim();
+    if (text === (note?.text ?? "")) {
+      setEditing(false);
+      return;
+    }
+    setState("saving");
+    try {
+      await onSave(text);
+      setState("saved");
+      setEditing(false);
+      setTimeout(() => setState("idle"), 1600);
+    } catch {
+      setState("idle");
+    }
+  };
+
+  if (!open) {
+    if (note) {
+      return (
+        <div className="mt-2 rounded-xl border border-line/60 bg-white px-3 py-2" data-plc="note">
+          <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-ink">{note.text}</p>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-muted">
+            <span>
+              {note.by}, {prettyWhen(note.at)}
+            </span>
+            {canWork && (
+              <button type="button" onClick={() => setEditing(true)} className="font-semibold text-accent-dark hover:underline">
+                Edit
+              </button>
+            )}
+            {state === "saved" && <span className="font-semibold text-[#56634a]">Saved</span>}
+          </p>
+        </div>
+      );
+    }
+    if (!canWork) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setEditing(true);
+          setTimeout(() => box.current?.focus(), 0);
+        }}
+        className="mt-1.5 inline-flex items-center gap-1 text-[11.5px] font-semibold text-muted hover:text-ink"
+      >
+        <DoodleIcon name="pencil" size={11} />
+        Add a note
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-2" data-plc="note-edit">
+      {ask && !note && !draft.trim() && <p className="mb-1 text-[11.5px] font-semibold text-[#a8443e]">Say why it is a No. The final approver reads this.</p>}
+      <textarea
+        ref={box}
+        rows={2}
+        value={draft}
+        autoFocus={editing}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => void save()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            void save();
+          } else if (e.key === "Escape") {
+            e.stopPropagation();
+            setDraft(note?.text ?? "");
+            setEditing(false);
+          }
+        }}
+        placeholder="What you checked, or what's wrong. Only the PLC team sees this."
+        className="w-full rounded-xl border border-line/70 bg-white px-3 py-2 text-[12.5px] leading-relaxed text-ink outline-none transition focus:border-ink/40"
+      />
+      <p className="mt-0.5 text-[11px] text-muted">{state === "saving" ? "Saving…" : "Saves when you click away."}</p>
+    </div>
+  );
+}
+
+/** One of Susan's lines: Yes, No or N/A, and a note when it needs one. */
+function LineRow({
+  line,
+  answer,
+  note,
+  canWork,
+  onAnswer,
+  onNote,
+}: {
+  line: PlcLine;
+  answer: PlcLineAnswer | undefined;
+  note: PlcNote | undefined;
+  canWork: boolean;
+  onAnswer: (v: PlcLineAnswer["v"] | null) => void;
+  onNote: (text: string) => Promise<void>;
+}) {
+  const opts: { v: PlcLineAnswer["v"]; label: string; on: string }[] = [
+    { v: "yes", label: "Yes", on: "bg-[#56634a] text-white" },
+    { v: "no", label: "No", on: "bg-[#c0504a] text-white" },
+    { v: "na", label: "N/A", on: "bg-ink/70 text-white" },
+  ];
+  return (
+    <li data-line={line.id} data-answer={answer?.v ?? ""}>
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+        <p className="min-w-0 flex-1 basis-[13rem] pt-0.5 text-[12.5px] leading-snug text-ink/85">{line.text}</p>
+        <div className="inline-flex shrink-0 rounded-full border border-line/80 bg-white p-0.5" role="group" aria-label={line.text}>
+          {opts.map((o) => (
+            <button
+              key={o.v}
+              type="button"
+              disabled={!canWork}
+              aria-pressed={answer?.v === o.v}
+              onClick={() => onAnswer(answer?.v === o.v ? null : o.v)}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${answer?.v === o.v ? o.on : "text-ink hover:bg-page"}`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {answer && <p className="text-[10.5px] text-muted">{answer.by}, {prettyWhen(answer.at)}</p>}
+      <NoteBox note={note} canWork={canWork && (answer?.v === "no" || Boolean(note))} ask={answer?.v === "no"} onSave={onNote} />
+    </li>
   );
 }

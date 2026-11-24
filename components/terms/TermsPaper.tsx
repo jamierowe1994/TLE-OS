@@ -1,6 +1,7 @@
 "use client";
 
 import type { Block, LandlordDetails, TermsDoc, TermsValues } from "@/lib/terms/types";
+import { forService } from "@/lib/terms/services";
 import { detailText } from "@/lib/terms/detail-text";
 
 /**
@@ -64,7 +65,7 @@ const Row = ({ dt, children }: { dt: React.ReactNode; children: React.ReactNode 
 export const Blank = ({ children }: { children: React.ReactNode }) => <span className="blank">{children}</span>;
 
 export default function TermsPaper({
-  doc,
+  doc: edition,
   values,
   reference,
   people,
@@ -91,6 +92,8 @@ export default function TermsPaper({
   /** Inside the reader's signature box, before they have signed: "Tap to sign here". */
   signSlot?: React.ReactNode;
 }) {
+  /* As it reads for its service: the edition itself, except the managed service without RLP (24 Nov 2026). */
+  const doc = forService(edition, values);
   const label = (k: keyof LandlordDetails) => doc.details.find((d) => d.key === k)?.label ?? k;
   const [titleA, titleB] = doc.title.includes(" & ") ? doc.title.split(" & ") : [doc.title, ""];
   const showDetail = (p: PaperPerson, k: keyof LandlordDetails) => {

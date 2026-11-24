@@ -21,7 +21,7 @@ import {
   updateDetails,
   waiveCheck,
 } from "@/lib/plc-store";
-import { clausesAnswered, gateFor, missingDocuments, PLC_CHECKS, readingStillFresh, rlpAnswered, scanSummary, softenWaived, sortFindings, type CheckId, type PlcCase, type SentAnyway } from "@/lib/plc";
+import { clausesAnswered, gateFor, missingDocuments, PLC_CHECKS, readingStillFresh, rlpAnswered, scanSummary, softenWaived, sortFindings, unexplainedNos, type CheckId, type PlcCase, type SentAnyway } from "@/lib/plc";
 import { scanCase, scanConfigured, type ScanOutcome } from "@/lib/plc-scan";
 import { actorName, currentUser } from "@/lib/plc-actor";
 import { isPlcApprover, plcApproverNames, plcViewer } from "@/lib/plc-approvers";
@@ -38,6 +38,8 @@ import { isTestId } from "@/lib/test-overlay";
 import { moveInToRex } from "@/lib/plc-move-in-rex";
 import { askFinalApproval, finalAskOffer } from "@/lib/plc-final-ask";
 import { hasWaiting, rereadWaiting } from "@/lib/plc-reread";
+import { lookFor } from "@/lib/new-look-store";
+import { nationOf } from "@/lib/property-flags";
 
 /**
  * GET   /api/plc/<id>  → the case, its findings in reading order, what's short
@@ -109,9 +111,16 @@ async function payload(c: PlcCase | null, req: NextRequest) {
   const rlpOn = c.rlpWanted ? await switchOn("rlp_requests") : false;
   const approvers = await plcApproverNames();
   const canCheck = dryRun || Boolean(me && can(me.role, "work:plc"));
+  /* Susan's checklist lines (switch "plclines") and the nation they depend on:
+     the pack's address, or the home's Documents folder in its file keys. */
+  const linesOn = Boolean(me && (await lookFor(me).catch(() => null))?.plclines);
+  const folders = [...c.documents.map((d) => d.key), ...(c.fileKeys ?? [])].map((k) => /^documents\/file-([^/]+)\//.exec(k)?.[1] ?? "");
+  const nation = nationOf(null, c.address, ...folders);
   return {
     case: { ...c, findings: sortFindings(c.findings) },
     checks: PLC_CHECKS,
+    linesOn,
+    nation,
     missing: missingDocuments(c).map((m) => m.id),
     summary: c.scannedAt ? scanSummary(c.findings) : null,
     scanConfigured: scanConfigured(),
@@ -202,7 +211,8 @@ async function finishSend(
   current: PlcCase,
   testCase: boolean,
   onProgress?: (read: number, of: number) => void,
-  anyway?: { by: string; email: string | null; reason: string } | null
+  anyway?: { by: string; email: string | null; reason: string } | null,
+  linesOn = false
 ): Promise<{ status: number; error: string | null }> {
   let outcome: ScanOutcome | null = null;
   /* The warnings the agent went past, kept as they were (16 Oct 2026), so
@@ -217,7 +227,7 @@ async function finishSend(
     outcome = { findings: sentAnyway(softened, anyway), recommendation: null as unknown as ScanOutcome["recommendation"] };
   } else if (scanConfigured() && current.state === "assembling" && current.moveInDate) {
     try {
-      outcome = await scanCase(current, onProgress);
+      outcome = await scanCase(current, onProgress, { linesOn });
       if (outcome) outcome = { ...outcome, findings: softenWaived(current, outcome.findings) };
       if (outcome && anyway) {
         wentPast = pastOf(outcome.findings);
@@ -442,6 +452,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             { status: 409 }
           );
         }
+        /* Susan's checklist lines go to the reader too, for whoever has "plclines" (24 Nov 2026). */
+        const sender = await currentUser(req);
+        const linesOn = Boolean(sender && (await lookFor(sender).catch(() => null))?.plclines);
         /* On the reading just done, Send anyway is quick: answered here, not in the background. */
         if (body.async && scanConfigured() && current.state === "assembling" && current.moveInDate && !(anyway && readingStillFresh(current))) {
           const running = sendJobs.get(id);
@@ -449,13 +462,13 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             for (const [k, j] of sendJobs) if (j.done && Date.now() - j.at > KEEP_MS) sendJobs.delete(k);
             const job: SendJob = { at: Date.now(), done: false, status: 200, error: null, read: 0, of: 0 };
             sendJobs.set(id, job);
-            void finishSend(id, current, testCase, (read, of) => Object.assign(job, { read, of }), anyway)
+            void finishSend(id, current, testCase, (read, of) => Object.assign(job, { read, of }), anyway, linesOn)
               .then((r) => Object.assign(job, r, { done: true }))
               .catch((e) => Object.assign(job, { done: true, status: 502, error: publicError(e, "The send didn't finish. Press Send again.") }));
           }
           return NextResponse.json({ ok: true, reading: true, progress: { read: 0, of: current.documents.length }, ...(await payload(current, req)) }, { status: 202 });
         }
-        const r = await finishSend(id, current, testCase, undefined, anyway);
+        const r = await finishSend(id, current, testCase, undefined, anyway, linesOn);
         const after = await getCase(id);
         return NextResponse.json(
           { ok: r.status === 200, ...(r.error ? { error: r.error } : {}), ...(after ? await payload(after, req) : {}) },
@@ -517,6 +530,16 @@ export async function POST(req: NextRequest, ctx: Ctx) {
            leaves the building and the agent is not told anything yet. */
         const me = await currentUser(req);
         const by = await actorName(req, "Compliance");
+        /* A No needs its why before the pack moves on (James, 24 Nov 2026):
+           the final approver can't act on a bare No. */
+        const before = await getCase(id);
+        const bare = before ? unexplainedNos(before) : [];
+        if (bare.length) {
+          return NextResponse.json(
+            { ok: false, error: `Say why next to each No first: ${bare.slice(0, 4).join("; ")}${bare.length > 4 ? ` and ${bare.length - 4} more` : ""}.` },
+            { status: 409 }
+          );
+        }
         const checked = await checkCase(id, { name: by, email: me?.email ?? null }, body.note ?? "");
         if (!testCase) await recordActivity({
           id: checked.id,
@@ -652,7 +675,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         const busy = await markScanning(id);
         let outcome;
         try {
-          outcome = await scanCase(busy);
+          const looker = await currentUser(req);
+          outcome = await scanCase(busy, undefined, { linesOn: Boolean(looker && (await lookFor(looker).catch(() => null))?.plclines) });
         } catch (e) {
           outcome = {
             findings: [

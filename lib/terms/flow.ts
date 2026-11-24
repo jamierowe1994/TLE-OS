@@ -18,6 +18,7 @@ import {
   submitterState,
 } from "@/lib/docuseal";
 import { edition, editionFor } from "@/lib/terms/catalogue";
+import { servicesFor } from "@/lib/terms/services";
 import { agentPhone } from "@/lib/agent-phone";
 import { getAppraisal, markTermsSent } from "@/lib/appraisal-store";
 import { sendContractPack } from "@/lib/contract-send";
@@ -91,6 +92,11 @@ export interface NewTerms {
   propertyAddress: string;
   agentLarn?: string | null;
   serviceLevel: string;
+  /**
+   * Which service (lib/terms/services), checked by the route: the managed
+   * service without RLP only for whoever has the "tobrlp" switch on.
+   */
+  serviceId?: string | null;
   setUpFee: string;
   managementFee: string;
   additionalFees?: string | null;
@@ -202,6 +208,8 @@ export async function createTerms(n: NewTerms): Promise<{ terms: TermsRow; agent
     agentLarn: (n.agentLarn ?? "").trim() || "Not recorded",
     propertyAddress: n.propertyAddress.trim(),
     serviceLevel: n.serviceLevel.trim(),
+    /* Kept only where it is one of ours, so the contract reads as that service (24 Nov 2026). */
+    ...(n.serviceId && servicesFor(n.country, true).some((o) => o.id === n.serviceId) ? { serviceId: n.serviceId } : {}),
     setUpFee: n.setUpFee.trim(),
     managementFee: n.managementFee.trim(),
     additionalFees: (n.additionalFees ?? "").trim() || "None",

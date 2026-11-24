@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { CopyButton } from "@/components/Bits";
 import type { AnswerGroup, TenantAnswers } from "@/lib/plc-tenant-answers";
-import { finalAskNow, finalAskSent, gateOf, plcTurn, resubmittedOf, sentAnywayNow, type PlcViewer, type Check, type CheckId, type Finding, type PlcAiSummary, type PlcCase, type SentAnyway } from "@/lib/plc";
+import { CHECK_GROUPS, checkLabel, finalAskNow, finalAskSent, gateOf, PLC_LINES, plcTurn, resubmittedOf, sentAnywayNow, tickHolds, type PlcViewer, type Check, type CheckId, type Finding, type PlcAiSummary, type PlcCase, type PlcNote, type SentAnyway } from "@/lib/plc";
 
 /**
  * The compliance side of a PLC handover, and the pieces it is built from.
@@ -24,6 +24,10 @@ import { finalAskNow, finalAskSent, gateOf, plcTurn, resubmittedOf, sentAnywayNo
 export type Loaded = {
   case: PlcCase;
   checks: Check[];
+  /** Susan's checklist lines are on for the person looking (switch "plclines"). */
+  linesOn?: boolean;
+  /** England, Wales or Scotland, from the pack's address; null when it can't say. */
+  nation?: "england" | "wales" | "scotland" | null;
   missing: CheckId[];
   summary: string | null;
   scanConfigured: boolean;
@@ -1032,15 +1036,10 @@ export function ComplianceSide({
         </section>
       )}
 
-      {/* The first check, on the record, once it is done. */}
-      {c.checkedAt && (
-        <section className="rounded-[18px] border border-line/70 bg-card p-5 text-[13.5px]">
-          <p className="font-semibold text-ink">
-            First check by {c.checkedBy} on {prettyWhen(c.checkedAt)}.
-          </p>
-          {c.checkNote && <p className="mt-1 whitespace-pre-wrap text-ink/70">{c.checkNote}</p>}
-        </section>
-      )}
+      {/* The first check, on the record, once it is done: with every note
+          left on a check, so the final approver reads what was seen instead
+          of checking the pack again (Susan Liles, 24 Nov 2026). */}
+      {(c.checkedAt || (c.notesBefore ?? []).length > 0) && <FirstCheckNotes c={c} checks={data.checks} linesOn={data.linesOn === true} />}
 
       {c.state === "checked" && data.me?.finalAsk && (
         <FinalAskCard c={c} offer={data.me.finalAsk} busy={busy === "ask-final"} notice={notice} onSend={() => act("ask-final")} />
@@ -1261,5 +1260,122 @@ export function ComplianceSide({
         </section>
       )}
     </div>
+  );
+}
+
+/* ─────────────────────────── the first check's notes ───────────────────── */
+
+type NoteRow = { key: string; what: string; answer: "Yes" | "No" | "N/A" | null; note: PlcNote | undefined };
+
+/** Every note and every No on the pack, in the order the checks run. */
+function noteRows(c: Pick<PlcCase, "documents" | "ticks" | "lines">, notes: Record<string, PlcNote>, checks: Check[], linesOn: boolean): NoteRow[] {
+  const out: NoteRow[] = [];
+  /* In the order the pack is laid out: the landlord's side, then the tenants'. */
+  const order = CHECK_GROUPS.flatMap((g) => g.checks);
+  const sorted = [...checks].sort((a, b) => (order.indexOf(a.id) + 1 || 99) - (order.indexOf(b.id) + 1 || 99));
+  for (const k of sorted) {
+    const t = c.ticks?.[k.id];
+    const keys = c.documents.filter((d) => d.checkId === k.id || d.covers?.includes(k.id)).map((d) => d.key);
+    const held = tickHolds(t, keys) ? t : undefined;
+    const label = checkLabel(k, linesOn);
+    if (notes[k.id] || held?.ok === false) out.push({ key: k.id, what: label, answer: held ? (held.ok ? "Yes" : "No") : null, note: notes[k.id] });
+    for (const l of PLC_LINES.filter((x) => x.checkId === k.id)) {
+      const a = c.lines?.[l.id];
+      if (notes[l.id] || a?.v === "no") {
+        out.push({ key: l.id, what: `${label}: ${l.text}`, answer: a ? (a.v === "yes" ? "Yes" : a.v === "no" ? "No" : "N/A") : null, note: notes[l.id] });
+      }
+    }
+  }
+  return out;
+}
+
+function NoteList({ rows }: { rows: NoteRow[] }) {
+  return (
+    <ul className="mt-3 divide-y divide-line/60 rounded-xl border border-line/60 bg-white">
+      {rows.map((r) => (
+        <li key={r.key} className="px-4 py-2.5" data-plc="first-check-note">
+          <div className="flex items-start gap-2">
+            <p className="min-w-0 flex-1 text-[13px] font-semibold text-ink">{r.what}</p>
+            {r.answer && (
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                  r.answer === "No" ? "bg-[#fdefec] text-[#a8443e]" : r.answer === "Yes" ? "bg-[#f1f4ec] text-[#4a5640]" : "bg-page text-muted"
+                }`}
+              >
+                {r.answer}
+              </span>
+            )}
+          </div>
+          {r.note ? (
+            <>
+              <p className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed text-ink/80">{r.note.text}</p>
+              <p className="mt-0.5 text-[11px] text-muted">
+                {r.note.by}, {prettyWhen(r.note.at)}
+              </p>
+            </>
+          ) : (
+            <p className="mt-1 text-[12px] text-muted">No note left.</p>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * First Check Notes (Susan Liles, 24 Nov 2026, ticket 668c196d). The first
+ * checker's notes on each check and every No, gathered above the final
+ * approval, then the notes from before any resubmission. Internal only.
+ */
+function FirstCheckNotes({ c, checks, linesOn }: { c: PlcCase; checks: Check[]; linesOn: boolean }) {
+  const rows = noteRows(c, c.notes ?? {}, checks, linesOn);
+  const answered = Object.entries(c.ticks ?? {}).filter(([id, t]) =>
+    tickHolds(t, c.documents.filter((d) => d.checkId === id || d.covers?.includes(id as CheckId)).map((d) => d.key))
+  );
+  const nos = answered.filter(([, t]) => t && !t.ok).length;
+  const before = c.notesBefore ?? [];
+  return (
+    <section className="rounded-[18px] border border-line/70 bg-card p-5 text-[13.5px]" data-plc="first-check-notes">
+      <Head icon="checklist" title="First Check Notes" />
+      {c.checkedAt ? (
+        <p className="mt-3 text-ink">
+          <span className="font-semibold">First check by {c.checkedBy} on {prettyWhen(c.checkedAt)}.</span>{" "}
+          {answered.length > 0 && (
+            <span className="text-ink/70">
+              {answered.length} {answered.length === 1 ? "check" : "checks"} answered: {answered.length - nos} yes{nos ? `, ${nos} no` : ""}.
+            </span>
+          )}
+        </p>
+      ) : (
+        <p className="mt-3 text-ink/70">Not checked again yet.</p>
+      )}
+      {c.checkNote && (
+        <p className="mt-2 whitespace-pre-wrap rounded-xl bg-page px-4 py-3 text-[13px] leading-relaxed text-ink/80">{c.checkNote}</p>
+      )}
+      {c.checkedAt && (rows.length > 0 ? <NoteList rows={rows} /> : <p className="mt-2 text-[12.5px] text-muted">No notes on any check.</p>)}
+      {before.length > 0 && (
+        <details className="mt-3 rounded-xl border border-line/60 bg-white px-4 py-2.5">
+          <summary className="cursor-pointer text-[12.5px] font-semibold text-ink">
+            Notes from before it was resubmitted ({before.length === 1 ? prettyWhen(before[0].at) : `${before.length} times`})
+          </summary>
+          {before
+            .slice()
+            .reverse()
+            .map((b, i) => (
+              <div key={`${b.at}-${i}`} className="mt-2">
+                <p className="text-[12px] text-muted">
+                  Taken back {prettyWhen(b.at)}
+                  {b.checkedBy ? `, first check by ${b.checkedBy}` : ""}
+                </p>
+                {b.checkNote && <p className="mt-1 whitespace-pre-wrap text-[13px] text-ink/80">{b.checkNote}</p>}
+                {(() => {
+                  const r = noteRows({ documents: [], ticks: {}, lines: {} }, b.notes ?? {}, checks, linesOn);
+                  return r.length ? <NoteList rows={r} /> : null;
+                })()}
+              </div>
+            ))}
+        </details>
+      )}
+    </section>
   );
 }

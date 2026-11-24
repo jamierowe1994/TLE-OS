@@ -13,6 +13,7 @@ import {
   checkById,
   gateOf,
   PLC_CHECKS,
+  PLC_LINES,
   type CheckId,
   type Finding,
   type FindingLevel,
@@ -121,9 +122,24 @@ This home is in Scotland. Right to Rent does not apply in Scotland: do not repor
 anything about right to rent, right to reside or a share code, in findings or in
 outstandingDefects, whatever the document says about it.`
     : "";
+  /* Susan Liles's items from the old LFL/PLC checklists (4 Nov 2026), behind
+     "plclines": what a person checks on this kind of document, asked of the
+     reader too. Anything it sees fail is a query for the first checker, never a
+     blocker: only the rules gate. */
+  const items = pack.linesOn
+    ? PLC_LINES.filter((l) => l.checkId === doc.checkId && !(pack.scottish && l.nations && !l.nations.includes("scotland")))
+    : [];
+  const susan = items.length
+    ? `
+
+Our checklist for this kind of document also asks the following. For each one the
+document itself shows is NOT met, add a finding saying which and why. Say nothing
+about the ones it meets, or the ones this document cannot show:
+${items.map((l) => `- ${l.text}`).join("\n")}`
+    : "";
   const common = `This document was filed against the check "${check?.label ?? doc.checkId}".
 The property is ${c.address}. The tenancy is due to start on ${moveIn}.
-The file is named "${doc.name}".${scotland}`;
+The file is named "${doc.name}".${scotland}${susan}`;
 
   /* Terms of business have no expiry and no end date, and saying so read as
      a problem (21 Oct 2026, 6 Ruskin Place). Asked for what matters instead. */
@@ -666,7 +682,7 @@ export type ScanOutcome = {
 };
 
 /** onProgress: called as each document is read (how many done, of how many), for the Send card. */
-export async function scanCase(c: PlcCase, onProgress?: (done: number, total: number) => void): Promise<ScanOutcome> {
+export async function scanCase(c: PlcCase, onProgress?: (done: number, total: number) => void, opts: { linesOn?: boolean } = {}): Promise<ScanOutcome> {
   const findings: Finding[] = [];
   const results: { checkId: CheckId; result: RuleResult }[] = [];
 
@@ -741,7 +757,7 @@ export async function scanCase(c: PlcCase, onProgress?: (done: number, total: nu
   }
 
   const client = new Anthropic();
-  const pack = await packContext(c);
+  const pack = { ...(await packContext(c)), linesOn: opts.linesOn === true };
   const readable = c.documents.filter((d) => checkById(d.checkId)?.scan !== "none");
 
   /* Three at a time (16 Oct 2026). One by one, a 13-document pack (Lianna's

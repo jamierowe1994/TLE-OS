@@ -10,6 +10,7 @@ import { editionFor } from "@/lib/terms/catalogue";
 import { homeRegistration } from "@/lib/terms/registration";
 import type { Country } from "@/lib/terms/types";
 import { lookFor } from "@/lib/new-look-store";
+import { NO_RLP } from "@/lib/terms/services";
 
 /**
  * Terms of Business sent from the OS (lib/terms).
@@ -17,7 +18,7 @@ import { lookFor } from "@/lib/new-look-store";
  *   GET  ?listingId=&propertyId=&appraisalId=  -> this home's terms, newest first,
  *                                                 and its landlord registration on file
  *   POST { country, listingId?, propertyId?, appraisalId?, propertyAddress,
- *          agentLarn?, serviceLevel, setUpFee, managementFee, additionalFees?,
+ *          agentLarn?, serviceLevel, serviceId?, setUpFee, managementFee, additionalFees?,
  *          people: [{ name, email, phone? }] }      -> made; the agent signs next
  */
 
@@ -62,7 +63,12 @@ export async function POST(req: NextRequest) {
     if (notTheirs) return NextResponse.json({ ok: false, error: notTheirs }, { status: 403 });
   }
   /* The November terms with the questions first, for whoever has that switch on (James, 5 Nov 2026). */
-  const next = b.next === true && Boolean((await lookFor(actor).catch(() => null))?.termsqs);
+  const look = await lookFor(actor).catch(() => null);
+  const next = b.next === true && Boolean(look?.termsqs);
+  /* The managed service without Rent & Legal Protection (Susan Liles, ticket 198f8ba9, 24 Nov 2026), for whoever has that switch on. */
+  const serviceId = str("serviceId") || null;
+  if (serviceId === NO_RLP && !look?.tobrlp)
+    return NextResponse.json({ ok: false, error: "The managed service without Rent & Legal Protection isn't switched on for you yet." }, { status: 400 });
   const pre = (b.prefill && typeof b.prefill === "object" ? b.prefill : {}) as Record<string, unknown>;
   try {
     const made = await createTerms({
@@ -74,6 +80,7 @@ export async function POST(req: NextRequest) {
       propertyAddress: str("propertyAddress"),
       agentLarn: str("agentLarn") || null,
       serviceLevel: str("serviceLevel"),
+      serviceId,
       setUpFee: str("setUpFee"),
       managementFee: str("managementFee"),
       additionalFees: str("additionalFees") || null,

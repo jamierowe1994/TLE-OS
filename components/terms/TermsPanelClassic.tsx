@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { isScottish } from "@/lib/property-flags";
-import { guessService, servicesFor } from "@/lib/terms/services";
+import { guessService, serviceOfTerms, servicesFor } from "@/lib/terms/services";
+import { useNewLook } from "@/lib/use-new-look";
 import type { Country } from "@/lib/terms/types";
 import TermsSignSheet from "@/components/terms/TermsSignSheet";
 import SignedTermsTabs from "@/components/terms/SignedTermsTabs";
@@ -52,7 +53,7 @@ type StaffTerms = {
   completedAt: string | null;
   createdAt: string;
   signedR2Key: string | null;
-  values: { serviceLevel: string; setUpFee: string; managementFee: string; additionalFees: string; agentLarn: string };
+  values: { serviceLevel: string; serviceId?: string; setUpFee: string; managementFee: string; additionalFees: string; agentLarn: string };
   replaces: string | null;
   parties: StaffParty[];
 };
@@ -112,6 +113,8 @@ export default function TermsPanelClassic({
   const [all, setAll] = useState<StaffTerms[] | null>(null);
   const [preview, setPreview] = useState(false);
   const [editions, setEditions] = useState<Editions>({ scotland: null, england: null });
+  /* The managed service with or without Rent & Legal Protection (Susan Liles, ticket 198f8ba9, 24 Nov 2026). */
+  const rlp = useNewLook("tobrlp") === true;
   const [sending, setSending] = useState(false);
   /* Adjust contract (James, 23 Oct 2026): the drawer again, filled in from the set out now. */
   const [adjusting, setAdjusting] = useState<StaffTerms | null>(null);
@@ -333,6 +336,7 @@ export default function TermsPanelClassic({
           feesOnRecord={feesOnRecord}
           scottish={scottish}
           editions={editions}
+          rlp={rlp}
           preview={preview}
           onClose={() => {
             setSending(false);
@@ -367,6 +371,7 @@ function SendDrawer({
   feesOnRecord,
   scottish,
   editions,
+  rlp = false,
   preview,
   onClose,
   onMade,
@@ -385,6 +390,8 @@ function SendDrawer({
   feesOnRecord?: { setUpFee?: string | null; managementFee?: string | null } | null;
   scottish: boolean | null;
   editions: Editions;
+  /** Switch "tobrlp": the managed service with or without Rent & Legal Protection. */
+  rlp?: boolean;
   preview: boolean;
   onClose: () => void;
   onMade: (t: StaffTerms) => void;
@@ -406,7 +413,7 @@ function SendDrawer({
   const [people, setPeople] = useState<Person[]>(
     from ? from.parties.map((p) => ({ name: p.name, email: p.email, phone: p.phone ?? "" })) : known.length ? known : [{ name: "", email: "", phone: "" }]
   );
-  const start = (from && servicesFor(country).find((o) => o.label === from.values.serviceLevel)) || guessService(country, from?.values.serviceLevel ?? serviceOnRecord);
+  const start = serviceOfTerms(country, from?.values, rlp) || guessService(country, from?.values.serviceLevel ?? serviceOnRecord, rlp);
   const [service, setService] = useState(start.id);
   const [setUpFee, setSetUpFee] = useState(from?.values.setUpFee ?? feesOnRecord?.setUpFee ?? start.setUpFee);
   const [managementFee, setManagementFee] = useState(from?.values.managementFee ?? feesOnRecord?.managementFee ?? start.managementFee);
@@ -423,7 +430,7 @@ function SendDrawer({
   }, [busy, onClose]);
 
   const pickService = (id: string) => {
-    const o = servicesFor(country).find((x) => x.id === id);
+    const o = servicesFor(country, rlp).find((x) => x.id === id);
     setService(id);
     if (o) {
       setSetUpFee(o.setUpFee);
@@ -436,11 +443,11 @@ function SendDrawer({
   async function make() {
     setBusy(true);
     setProblem(null);
-    const o = servicesFor(country).find((x) => x.id === service);
+    const o = servicesFor(country, rlp).find((x) => x.id === service);
     const j = await fetch("/api/terms", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ country, listingId, propertyId, appraisalId, propertyAddress: address, agentLarn: larn, serviceLevel: o?.label ?? service, setUpFee, managementFee, additionalFees: additional, people, replaces: from?.id ?? null }),
+      body: JSON.stringify({ country, listingId, propertyId, appraisalId, propertyAddress: address, agentLarn: larn, serviceLevel: o?.label ?? service, ...(rlp ? { serviceId: service } : {}), setUpFee, managementFee, additionalFees: additional, people, replaces: from?.id ?? null }),
     })
       .then((r) => r.json())
       .catch(() => null);
@@ -512,7 +519,7 @@ function SendDrawer({
             <span>Service and fees</span>
             <span className="nl-fsel is-set self-start">
               <select value={service} onChange={(e) => pickService(e.target.value)} aria-label="Service">
-                {servicesFor(country).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                {servicesFor(country, rlp).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
               </select>
             </span>
           </div>

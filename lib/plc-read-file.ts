@@ -67,7 +67,8 @@ identity check and a Right to Rent result. File it under tenant-checks, and set
 right_to_rent_confirmed only if the report itself states the Right to Rent check was passed or
 approved.`;
 
-const SLOTS = PLC_CHECKS.map((c) => c.id);
+/* Switched checks (Susan's three, "plclines") are never chosen by the reader: an agent without the switch would not see the box. */
+const SLOTS = PLC_CHECKS.filter((c) => !c.switch).map((c) => c.id);
 
 const TOOL: Anthropic.Tool = {
   name: "sort_document",

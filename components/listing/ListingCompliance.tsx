@@ -7,6 +7,8 @@ import FileDocuments, { UploadForm, type Doc } from "@/components/FileDocuments"
 import SendTermsPopout from "@/components/SendTermsPopout";
 import TermsPanel from "@/components/terms/TermsPanel";
 import SignedTermsTabs from "@/components/terms/SignedTermsTabs";
+import { useNewLook } from "@/lib/use-new-look";
+import { NO_RLP } from "@/lib/terms/services";
 import HomeFacts from "@/components/HomeFacts";
 import { filesOnIssueDate } from "@/lib/cert-life";
 import { CERT_KINDS, CERT_KIND_LABEL, certFilesAs, certNotReadyBecause, kindFilesOnIssueDate, noExpiryNote } from "@/lib/cert-kinds";
@@ -779,6 +781,18 @@ function NewLookCompliance({
   const [sending, setSending] = useState(false);
   /* Reissue on New Terms (James, 24 Oct 2026): signed terms can still be replaced by a new set. */
   const [reissue, setReissue] = useState(0);
+  /* Reissue Without Rent & Legal Protection (Susan Liles, ticket 198f8ba9, 24 Nov 2026): the same
+     send screen, opened on the managed service without RLP. Behind the "tobrlp" switch, on the
+     new terms screen only. */
+  const rlpOn = useNewLook("tobrlp") === true;
+  const termsOn = useNewLook("terms") === true;
+  const rlp = rlpOn && termsOn;
+  const [noRlpAt, setNoRlpAt] = useState(0);
+  const noRlpButton = rlp ? (
+    <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setNoRlpAt(Date.now())}>
+      Reissue Without Rent &amp; Legal Protection
+    </button>
+  ) : null;
 
   /* ── The certificates, read from the same place the property file reads them ── */
   const [cert, setCert] = useState<CertAnswer | null>(null);
@@ -1326,6 +1340,7 @@ function NewLookCompliance({
               <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" onClick={() => setReissue((n) => n + 1)}>
                 Reissue on New Terms
               </button>
+              {noRlpButton}
             </>
           ) : tobState === "signed" ? (
             <>
@@ -1336,6 +1351,7 @@ function NewLookCompliance({
               <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => setReissue((n) => n + 1)}>
                 Reissue on New Terms
               </button>
+              {noRlpButton}
             </>
           ) : tobState === "sent" ? (
             <>
@@ -1364,6 +1380,7 @@ function NewLookCompliance({
                 label="More about the terms"
                 items={[
                   { label: "Reissue on New Terms", onClick: () => setReissue((n) => n + 1) },
+                  ...(rlp ? [{ label: "Reissue Without Rent & Legal Protection", sub: "The landlord signs new terms", onClick: () => setNoRlpAt(Date.now()) }] : []),
                   { label: "Upload a signed copy", sub: "Signed on paper or by email", onClick: () => pickPaper("terms", "terms_of_business", "") },
                 ]}
               />
@@ -1381,6 +1398,7 @@ function NewLookCompliance({
         <TermsPanel
           quiet
           openNew={reissue}
+          reissue={noRlpAt ? { at: noRlpAt, service: NO_RLP } : null}
           listingId={listingId}
           propertyId={propertyId}
           propertyAddress={address}

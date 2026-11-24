@@ -3067,6 +3067,13 @@ ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS ai_summary JSONB;
 -- The agent taking a sent pack back, cancelling it or starting it again
 -- (James, 11 Nov 2026), oldest first: [{ kind, at, by, byEmail, from, reason }].
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS agent_moves JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Notes on each check and Susan's checklist lines (24 Nov 2026, ticket 668c196d):
+-- check_notes { checkId|lineId: { text, by, byEmail, at } }, line_ticks { lineId: { v, by, at } },
+-- notes_before [{ at, notes, checkNote, checkedBy }] - the notes a pack had when it was taken back.
+-- Each written by its own UPDATE (lib/plc-store setNote, setLine), never by the general save.
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS check_notes JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS line_ticks JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS notes_before JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 -- Certificates that came in OUTSIDE a PLC pack (5 Sep 2026): the backlog
 -- downloaded out of Propoly and dropped in, batch by batch. The OS keeps the

@@ -40,6 +40,7 @@ import { cardStatus, stageStatus } from "@/components/applications/LetsBoard";
 import { PORTAL_STAGES, propolyDealUrl, stagesFor } from "@/lib/business/propoly-stages";
 import { CANCEL_REASONS, CANCEL_WORDS } from "@/lib/let-cancel-words";
 import { isScottish } from "@/lib/property-flags";
+import { useNewLook } from "@/lib/use-new-look";
 import { Badge, Ico, Menu, Tabs, type MenuItem, type Tone } from "@/components/new-look/Parts";
 import PhotoGrid from "@/components/new-look/PhotoGrid";
 import SteveFace from "@/components/SteveFace";
@@ -603,6 +604,10 @@ export default function ApplicationDrawer({
   const [contactsOpen, setContactsOpen] = useState(false);
   /* What the market appraisal behind the home learned, on the let too (James, 10 Nov 2026). */
   const letAppraisal = useListingAppraisal(info?.listingId ?? null);
+  /* Reissue Without Rent & Legal Protection (Susan Liles, ticket 198f8ba9, 24 Nov 2026): a tenant
+     who can't get RLP and a landlord who goes ahead anyway. Behind "tobrlp", on the new terms screen. */
+  const rlpOn = useNewLook("tobrlp") === true;
+  const termsOn = useNewLook("terms") === true;
   const [cancelled, setCancelled] = useState<Cancellation | null>(null);
   /* Each person against the let's Propoly deal (lib/let-propoly-sync, 20 Oct 2026). */
   const [picture, setPicture] = useState<Picture | null>(null);
@@ -1460,6 +1465,10 @@ export default function ApplicationDrawer({
       ...(app && !intro && propoly.state === "push" && cancelled ? [{ label: "Push to Propoly", onClick: () => setPropolyOpen(true) }] : []),
       ...(propoly.state === "in" && propoly.url ? [{ label: "Open in Propoly", sub: propoly.sub ?? undefined, href: propoly.url }] : []),
       ...(photoListing ? [{ label: "Open the listing", href: `/listings/${encodeURIComponent(String(photoListing))}` }] : []),
+      /* Opens the listing's send screen on the managed service without RLP; nothing goes until the agent signs and sends it there. */
+      ...(rlpOn && termsOn && photoListing && !cancelled && !intro
+        ? [{ label: "Reissue Without Rent & Legal Protection", sub: "New terms for the landlord to sign", href: `/listings/${encodeURIComponent(String(photoListing))}?tab=compliance&reissue=no-rlp` }]
+        : []),
       "rule",
       cancelled
         ? { label: "Deal cancelled", sub: cancelled.reason, onClick: () => setCancelOpen(true) }

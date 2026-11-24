@@ -58,6 +58,14 @@ export type CheckId =
   | "emergency-lighting"
   | "alarms"
   | "legionella"
+  /* Susan Liles's items from the old LFL/PLC checklists (4 Nov 2026), behind
+     the "plclines" switch: the NRL1 letter for a landlord living overseas,
+     proof the gas engineer is registered and qualified, and the landlord's
+     registration (Scottish Landlord Register, Rent Smart Wales, England's
+     PRS Database). Optional uploads: they never stop a Send. */
+  | "nrl1"
+  | "gas-safe-proof"
+  | "landlord-registration"
   /* Whatever the reader could not place. Never required, never pushed. */
   | "other";
 
@@ -112,6 +120,8 @@ export type Check = {
   gate: Gate;
   /** The gate instead, when the let is an HMO. */
   hmoGate?: Gate;
+  /** Only shown while this switch is on for the person looking (lib/new-look). */
+  switch?: "plclines";
 };
 
 export type Gate = "required" | "conditional" | "after" | "manual" | "optional";
@@ -270,6 +280,33 @@ export const PLC_CHECKS: Check[] = [
     gate: "optional",
   },
   {
+    id: "nrl1",
+    label: "NRL1 approval letter",
+    needs: "HMRC's NRL1 approval, or proof it has been applied for, when a landlord lives overseas",
+    scan: "presence",
+    why: "A landlord living abroad has rent taxed at source unless HMRC has approved them, and the TOB page 2 declaration says which.",
+    gate: "optional",
+    switch: "plclines",
+  },
+  {
+    id: "gas-safe-proof",
+    label: "Gas Safe register proof",
+    needs: "The engineer's Gas Safe Register entry, showing they are registered and qualified for every appliance on the record",
+    scan: "presence",
+    why: "A gas record from an engineer who is not registered, or not qualified for the boiler or the hob, is not a gas record.",
+    gate: "optional",
+    switch: "plclines",
+  },
+  {
+    id: "landlord-registration",
+    label: "Landlord registration",
+    needs: "Scottish Landlord Register, Rent Smart Wales, or the PRS Database in England, for every landlord",
+    scan: "presence",
+    why: "Scotland and Wales will not let a landlord let without it, and England's PRS Database starts in December 2026.",
+    gate: "optional",
+    switch: "plclines",
+  },
+  {
     id: "other",
     label: "Anything else",
     needs: "Inventory, floor plan, or anything we could not sort",
@@ -317,7 +354,7 @@ export const CHECK_GROUPS: { id: "landlord" | "tenant"; title: string; blurb: st
     id: "landlord",
     title: "Landlord Documents",
     blurb: "The landlord's ID and every certificate for the property.",
-    checks: ["landlord-id-aml", "landlord-aml", "proof-of-ownership", "terms-of-business", "gas-safety", "epc", "eicr", "licensing", "pat", "fire-safety", "emergency-lighting", "alarms", "legionella"],
+    checks: ["landlord-id-aml", "landlord-aml", "proof-of-ownership", "terms-of-business", "nrl1", "landlord-registration", "gas-safety", "gas-safe-proof", "epc", "eicr", "licensing", "pat", "fire-safety", "emergency-lighting", "alarms", "legionella"],
   },
   {
     id: "tenant",
@@ -572,6 +609,110 @@ export type PlcDocument = {
  * to remember to clear it.
  */
 export type PlcTick = { ok: boolean; by: string; at: string; keys: string[] };
+
+/**
+ * A note on one check, or one of Susan's lines, from whoever is working the
+ * pack (Susan Liles, 24 Nov 2026, ticket 668c196d: "Kirstie can't send me any
+ * notes from when she does the first PLC check, so I am checking everything
+ * again"). Her ticks said yes or no and nothing else; the one note box came
+ * at the very end and was empty on most packs. A note sits on the check it is
+ * about and reaches the final approver there and in First Check Notes.
+ *
+ * Internal. Never put into an email to an agent or a landlord.
+ */
+export type PlcNote = { text: string; by: string; byEmail?: string | null; at: string };
+
+/** The notes a pack had when the agent took it back to resubmit, kept to read. */
+export type PlcNotesBefore = { at: string; notes: Record<string, PlcNote>; checkNote?: string; checkedBy?: string | null };
+
+/** Yes, no or not applicable on one of Susan's lines. */
+export type PlcLineAnswer = { v: "yes" | "no" | "na"; by: string; at: string };
+
+/**
+ * Susan's lines (her 4 Nov 2026 email and the England and Scotland PLC
+ * checklists she attached), each under the check it belongs to. What the
+ * first checker confirms by eye; the reader is told to look for the same
+ * things (lib/plc-scan). Behind the "plclines" switch.
+ *
+ * `nations` limits a line to the homes it applies to; `when` to packs where
+ * it can arise. Neither hides a line already answered.
+ */
+export type PlcLine = {
+  id: string;
+  checkId: CheckId;
+  text: string;
+  nations?: ("england" | "wales" | "scotland")[];
+  when?: "rlp" | "guarantor";
+};
+
+export const PLC_LINES: PlcLine[] = [
+  { id: "tob-complete", checkId: "terms-of-business", text: "Fully completed and signed, with every landlord's details filled in" },
+  { id: "tob-rlp", checkId: "terms-of-business", text: "Experts Managed Service including RLP: the terms say so, and the let is eligible" },
+  { id: "tob-overseas", checkId: "terms-of-business", text: "Landlord is not resident overseas (page 2 declaration). If they are, the NRL1 letter is on the pack" },
+  { id: "id-matches", checkId: "landlord-id-aml", text: "Matches the tenancy agreement and is fully legible" },
+  { id: "aml-passed", checkId: "landlord-aml", text: "Sanctions check passed, and the date it was done is on it" },
+  { id: "ownership-matches", checkId: "proof-of-ownership", text: "Legible and the owners match the terms" },
+  { id: "reg-scotland", checkId: "landlord-registration", text: "Every landlord is on the Scottish Landlord Register", nations: ["scotland"] },
+  { id: "reg-larn", checkId: "landlord-registration", text: "Our LARN is on the PRT and approved on the register", nations: ["scotland"] },
+  { id: "reg-wales", checkId: "landlord-registration", text: "Landlord and property registered with Rent Smart Wales", nations: ["wales"] },
+  { id: "reg-prs", checkId: "landlord-registration", text: "Registered on the PRS Database (from December 2026)", nations: ["england"] },
+  { id: "gas-appliances", checkId: "gas-safety", text: "Shows every gas appliance the landlord listed on the portal" },
+  { id: "gas-registered", checkId: "gas-safety", text: "Engineer is on the Gas Safe Register (proof uploaded)" },
+  { id: "gas-qualified", checkId: "gas-safety", text: "Engineer is qualified for every appliance on the record (proof uploaded)" },
+  { id: "gas-remedial", checkId: "gas-safety", text: "Landlord told of any remedial works or recommendations" },
+  { id: "gas-none", checkId: "gas-safety", text: "No gas: the page 2 declaration on the terms is ticked" },
+  { id: "epc-e", checkId: "epc", text: "In date and rated E or above" },
+  { id: "eicr-code1", checkId: "eicr", text: "Satisfactory, no Code 1s, and the engineer is on the register" },
+  { id: "eicr-code23", checkId: "eicr", text: "Landlord told of any Code 2s and 3s and the works recommended" },
+  { id: "lic-declaration", checkId: "licensing", text: "Page 2 declaration on the terms is ticked" },
+  { id: "lic-kamma", checkId: "licensing", text: "Checked KAMMA for HMO or selective licensing" },
+  { id: "lic-docs", checkId: "licensing", text: "Where a licence or exemption applies, it is on the pack" },
+  { id: "ref-passed", checkId: "tenant-checks", text: "Every tenant passed referencing" },
+  { id: "ref-rlp", checkId: "tenant-checks", text: "RLP: ALL references show acceptable for RLP", when: "rlp" },
+  { id: "ref-indemnity", checkId: "tenant-checks", text: "Failed but the landlord is going ahead: their indemnity email is on the pack" },
+  { id: "tenant-aml", checkId: "tenant-checks", text: "Tenant sanctions check passed (may be on the reference)" },
+  { id: "guarantor-passed", checkId: "guarantor-checks", text: "Guarantor passed referencing and the sanctions check", when: "guarantor" },
+  { id: "rtr-seen", checkId: "right-to-rent", text: "Yoti used, or the originals seen in person", nations: ["england", "wales"] },
+  { id: "agreement-matches", checkId: "tenancy-agreement", text: "Landlord, property, tenants, rent and terms match the terms of business and the references" },
+];
+
+/** Susan's lines for one check on this pack. A line already answered always shows. */
+export function linesFor(
+  checkId: CheckId,
+  pack: { nation?: "england" | "wales" | "scotland" | null; rlpWanted?: boolean | null; lines?: Record<string, PlcLineAnswer> }
+): PlcLine[] {
+  return PLC_LINES.filter((l) => {
+    if (l.checkId !== checkId) return false;
+    if (pack.lines?.[l.id]) return true;
+    if (l.nations && pack.nation && !l.nations.includes(pack.nation)) return false;
+    if (l.when === "rlp" && pack.rlpWanted === false) return false;
+    return true;
+  });
+}
+
+/**
+ * The No answers with no note beside them. A No is a reason to look again,
+ * and the final approver can't act on one without the why (James, 24 Nov 2026).
+ */
+export function unexplainedNos(c: Pick<PlcCase, "documents" | "ticks" | "notes" | "lines">): string[] {
+  const out: string[] = [];
+  for (const [id, t] of Object.entries(c.ticks ?? {})) {
+    const keys = c.documents.filter((d) => d.checkId === id || d.covers?.includes(id as CheckId)).map((d) => d.key);
+    if (t && !t.ok && tickHolds(t, keys) && !c.notes?.[id]?.text.trim()) out.push(checkById(id as CheckId)?.label ?? id);
+  }
+  for (const [id, a] of Object.entries(c.lines ?? {})) {
+    if (a?.v === "no" && !c.notes?.[id]?.text.trim()) out.push(PLC_LINES.find((l) => l.id === id)?.text ?? id);
+  }
+  return out;
+}
+
+/** The check's name as the person looking should read it (Susan: "Selective/Mandatory Licencing & HMO"). */
+export const checkLabel = (check: Pick<Check, "id" | "label">, linesOn: boolean): string =>
+  linesOn && check.id === "licensing" ? "Selective/Mandatory Licensing & HMO" : check.label;
+
+/** The checks the person looking should see: switched ones only while their switch is on. */
+export const visibleChecks = <T extends Pick<Check, "switch">>(checks: T[], linesOn: boolean): T[] =>
+  checks.filter((k) => !k.switch || linesOn);
 
 /** Is this tick still about the files on the check now? */
 export function tickHolds(t: PlcTick | undefined, keys: string[]): t is PlcTick {
@@ -894,6 +1035,12 @@ export type PlcCase = {
   rlpRequest?: RlpRequest | null;
   /** Kirstie's checklist, by check (23 Oct 2026). */
   ticks?: Partial<Record<CheckId, PlcTick>>;
+  /** Notes on checks and lines, by check id or line id (24 Nov 2026). Internal. */
+  notes?: Record<string, PlcNote>;
+  /** Notes from before each resubmission, oldest first. */
+  notesBefore?: PlcNotesBefore[];
+  /** Susan's lines, by line id (PLC_LINES). */
+  lines?: Record<string, PlcLineAnswer>;
   /** The AI summary, as last written (23 Oct 2026). */
   aiSummary?: PlcAiSummary | null;
   /** The final decision, the words, and the name against it. */

@@ -1,8 +1,10 @@
 "use client";
 
+import { useNewLook } from "@/lib/use-new-look";
+
 import { useState } from "react";
 import FloatSheet, { FloatFoot } from "@/components/new-look/FloatSheet";
-import { DATED_CHECKS, PLC_CHECKS, checkById, type CheckId, type PlcCase, type PlcDocument } from "@/lib/plc";
+import { DATED_CHECKS, PLC_CHECKS, checkById, checkLabel, type CheckId, type PlcCase, type PlcDocument } from "@/lib/plc";
 
 /**
  * One document, opened in front of the check rather than in a new tab
@@ -34,6 +36,7 @@ export default function DocViewer({
   onClose: () => void;
 }) {
   const r = doc.read ?? null;
+  const linesOn = useNewLook("plclines") === true;
   const dated = DATED_CHECKS.has(doc.checkId);
   const [expiry, setExpiry] = useState(r?.expiryDate?.slice(0, 10) ?? "");
   const [issue, setIssue] = useState(r?.issueDate?.slice(0, 10) ?? "");
@@ -139,8 +142,8 @@ export default function DocViewer({
           <label className="nl-docv-row">
             <span>Filed under</span>
             <select value={doc.checkId} onChange={(e) => void onMove(doc, e.target.value as CheckId)}>
-              {PLC_CHECKS.map((c) => (
-                <option key={c.id} value={c.id}>{c.label}</option>
+              {PLC_CHECKS.filter((c) => !c.switch || linesOn || c.id === doc.checkId).map((c) => (
+                <option key={c.id} value={c.id}>{checkLabel(c, linesOn)}</option>
               ))}
             </select>
           </label>

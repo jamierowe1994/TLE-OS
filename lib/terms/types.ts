@@ -26,6 +26,12 @@ export interface TermsValues {
   propertyAddress: string;
   /** The service the landlord is taking, as the contract words it. */
   serviceLevel: string;
+  /**
+   * Which service it is (lib/terms/services), kept from 24 Nov 2026 on so the
+   * managed service without Rent & Legal Protection reads as such. Absent on
+   * anything sent before: those read by their words, unchanged.
+   */
+  serviceId?: string;
   setUpFee: string;
   managementFee: string;
   additionalFees: string;

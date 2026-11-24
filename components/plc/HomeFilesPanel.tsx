@@ -1,5 +1,7 @@
 "use client";
 
+import { useNewLook } from "@/lib/use-new-look";
+
 import { useCallback, useEffect, useState } from "react";
 import { PLC_CHECKS, gateOf, groupOf, type CheckId, type PlcCase } from "@/lib/plc";
 import type { Doc } from "@/components/FileDocuments";
@@ -64,7 +66,8 @@ export default function HomeFilesPanel({
   const left = usable.filter((d) => !inPack.has(keyOf(d.url)!));
   const already = usable.length - left.length;
   /* This step's checks, the ones this let needs first. */
-  const checks = PLC_CHECKS.filter((c) => groupOf(c.id) === step).sort((a, b) => Number(gateOf(b, kase.letType) === "required") - Number(gateOf(a, kase.letType) === "required"));
+  const linesOn = useNewLook("plclines") === true;
+  const checks = PLC_CHECKS.filter((c) => (!c.switch || linesOn) && groupOf(c.id) === step).sort((a, b) => Number(gateOf(b, kase.letType) === "required") - Number(gateOf(a, kase.letType) === "required"));
   const missing = new Set(checks.filter((c) => !kase.documents.some((d) => d.checkId === c.id || d.covers?.includes(c.id))).map((c) => c.id));
 
   async function file(d: Doc, checkId: CheckId) {

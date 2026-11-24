@@ -1,5 +1,7 @@
 "use client";
 
+import { useNewLook } from "@/lib/use-new-look";
+
 import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -13,6 +15,8 @@ import {
   groupOf,
   guessCheck,
   PLC_CHECKS,
+  checkLabel,
+  visibleChecks,
   checkById,
   type CheckId,
   type FileRead,
@@ -514,7 +518,9 @@ export default function PlcDocuments({
   const done = rows.filter((r) => r.state === "done");
   const elsewhere = done.filter((r) => r.filedAs && r.filedAs !== "other" && groupOf(r.filedAs) !== step);
   const unsorted = kase.documents.filter((d) => d.checkId === "other");
-  const checks = PLC_CHECKS.filter((c) => group.checks.includes(c.id) && (!only || only.includes(c.id)));
+  /* Susan's three upload boxes (NRL1, Gas Safe proof, registration) only with "plclines" on (24 Nov 2026). */
+  const linesOn = useNewLook("plclines") === true;
+  const checks = visibleChecks(PLC_CHECKS, linesOn).filter((c) => group.checks.includes(c.id) && (!only || only.includes(c.id)));
   /* One document open in front of the check (components/plc/DocViewer). */
   const [viewing, setViewing] = useState<string | null>(null);
   const viewed = viewing ? kase.documents.find((d) => d.key === viewing) ?? null : null;
@@ -582,9 +588,9 @@ export default function PlcDocuments({
             aria-label="Move to another check"
             className="min-w-0 flex-1 rounded-lg border border-line bg-transparent px-2 py-1 text-xs sm:w-[9.5rem] sm:flex-none"
           >
-            {PLC_CHECKS.map((c) => (
+            {PLC_CHECKS.filter((c) => !c.switch || linesOn || c.id === d.checkId).map((c) => (
               <option key={c.id} value={c.id}>
-                {c.label}
+                {checkLabel(c, linesOn)}
               </option>
             ))}
           </select>

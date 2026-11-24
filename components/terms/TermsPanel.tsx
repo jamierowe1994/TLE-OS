@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import TermsSendScreen, { type Editions, type StaffParty, type StaffTerms } from "@/components/terms/TermsSendScreen";
 import { Badge, Ico } from "@/components/new-look/Parts";
 import type { HomeReg } from "@/lib/reg-numbers";
+import { NO_RLP, rlpIncludedIn } from "@/lib/terms/services";
 
 /**
  * TERMS OF BUSINESS ON A HOME (James, 23 Oct 2026).
@@ -96,6 +97,8 @@ function OnPagePanel({
   const [editions, setEditions] = useState<Editions>({ scotland: null, england: null });
   /* The November terms with the questions before the contract (James, 5 Nov 2026), for whoever has that switch on. */
   const asks = useNewLook("termsqs") === true;
+  /* The managed service with or without Rent & Legal Protection (Susan Liles, ticket 198f8ba9, 24 Nov 2026). */
+  const rlp = useNewLook("tobrlp") === true;
   const [nextEditions, setNextEditions] = useState<Editions>({ scotland: null, england: null });
   /* The home's landlord registration on file (4 Nov 2026): the send screen draws each landlord's on the contract. */
   const [registration, setRegistration] = useState<HomeReg | null>(null);
@@ -162,6 +165,24 @@ function OnPagePanel({
     setWanted(reissue.service);
     setScreen(live && live.status === "sent" ? { mode: "adjust", from: live } : { mode: "new" });
   }, [reissue, all, live]);
+  /* Reissue Without Rent & Legal Protection (24 Nov 2026): a tenant who failed the RLP
+     referencing and a landlord who goes ahead anyway. The send screen opens on the managed
+     service without RLP; nothing goes until the agent signs and sends it there. */
+  const withoutRlp = useCallback(() => {
+    setWanted(NO_RLP);
+    setScreen(live && live.status === "sent" ? { mode: "adjust", from: live } : { mode: "new" });
+  }, [live]);
+  useEffect(() => {
+    /* A let's Reissue Without Rent & Legal Protection lands on the listing with ?reissue=no-rlp:
+       taken by the first panel to read it, and dropped from the address so a reload doesn't reopen it. */
+    if (!rlp || all === null) return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("reissue") !== "no-rlp") return;
+    sp.delete("reissue");
+    const rest = sp.toString();
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${rest ? `?${rest}` : ""}${window.location.hash}`);
+    withoutRlp();
+  }, [rlp, all, withoutRlp]);
   /* While an adjusted set waits for the agent's signature, the one it replaces is still out. */
   const replacing = live?.replaces ? (all ?? []).find((t) => t.id === live.replaces && t.status === "sent") ?? null : null;
 
@@ -286,6 +307,9 @@ function OnPagePanel({
               <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => setRemindAsk(true)}>Send a reminder</button>
             )}
             <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setScreen({ mode: "adjust", from: live })}>Adjust contract</button>
+            {rlp && rlpIncludedIn(live.values) !== false && (
+              <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={withoutRlp}>Reissue Without Rent &amp; Legal Protection</button>
+            )}
           </span>
         ) : live.status === "signed" ? (
           <span className="nl-terms-acts">
@@ -300,6 +324,11 @@ function OnPagePanel({
             <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setScreen({ mode: "new" })}>
               Reissue on New Terms
             </button>
+            {rlp && rlpIncludedIn(live.values) !== false && (
+              <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={withoutRlp}>
+                Reissue Without Rent &amp; Legal Protection
+              </button>
+            )}
           </span>
         ) : null}
       </section>
@@ -384,6 +413,7 @@ function OnPagePanel({
           scottish={scottish}
           editions={asks && !(screen.mode === "sign") ? nextEditions : editions}
           asks={asks}
+          rlp={rlp}
           pack={pack}
           registration={registration}
           preview={preview}

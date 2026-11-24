@@ -300,6 +300,8 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       /* Ticket 0573c824, 20 Nov 2026. */
       "The All tab counts every let in progress on your board: deals still moving (not cancelled, and not slipped more than 30 days past move-in) plus accepted lets still to push to Propoly. A let drops off once its deal is finished in Propoly. The PM Dashboard's Lets in Progress tile is the same count.",
       "Start the PLC check is the brown button on the let's file once the application is with the landlord or accepted. The how-to guide on handing over the PLC pack has the steps; a pack sent back arrives as a notification with the checker's note.",
+      /* Ticket 668c196d, 24 Nov 2026. */
+      "On the PLC review, whoever does the first check can leave a note on each check (Add a note under it). A No needs a note before the pack can be passed on. The final approver reads every note under First Check Notes above Final Approval, including notes from before a resubmission. Notes stay with the PLC team: they are never emailed to the agent or the landlord.",
       "The right-to-rent gap warning is real — it is counting applications with nothing recorded.",
       "A tenant's right to rent expiry date (or no time limit) is recorded by asking Steve - he puts it on the let after a yes, and it shows on the tenant's Their application card as Right to rent expiry. The office's bell reminds them when the follow-up check is due. A Scottish let has no right to rent, so it shows none and takes none.",
     ],

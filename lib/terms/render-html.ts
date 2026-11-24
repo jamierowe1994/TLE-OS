@@ -1,5 +1,6 @@
 import type { Block, LandlordDetails, TermsDoc, TermsValues } from "@/lib/terms/types";
 import { printsFor } from "@/lib/terms/detail-text";
+import { forService } from "@/lib/terms/services";
 
 /**
  * The contract as the HTML DocuSeal turns into the signed document.
@@ -106,7 +107,9 @@ const CSS = `
 `;
 
 /** The whole contract, ready for POST /submissions/html. */
-export function contractHtml(doc: TermsDoc, v: TermsValues, people: number): string {
+export function contractHtml(edition: TermsDoc, v: TermsValues, people: number): string {
+  /* As it reads for its service: the edition itself, except the managed service without RLP (24 Nov 2026). */
+  const doc = forService(edition, v);
   const sections = doc.sections
     .map((s) => `<section><h2>${s.n ? `${esc(s.n)}. ` : ""}${esc(s.title)}</h2>${s.blocks.map((b) => block(b, doc, v, people)).join("")}</section>`)
     .join("");

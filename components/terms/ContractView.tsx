@@ -1,6 +1,7 @@
 "use client";
 
 import type { Block, LandlordDetails, TermsDoc, TermsValues } from "@/lib/terms/types";
+import { forService } from "@/lib/terms/services";
 
 /**
  * The contract written out as a page (James, 23 Oct 2026: "take this
@@ -41,7 +42,7 @@ export type Reader = {
 };
 
 export default function ContractView({
-  doc,
+  doc: edition,
   values,
   people,
   reader,
@@ -51,6 +52,8 @@ export default function ContractView({
   people: Array<{ key: string; name: string; signed: boolean; you: boolean }>;
   reader: Reader;
 }) {
+  /* As it reads for its service: the edition itself, except the managed service without RLP (24 Nov 2026). */
+  const doc = forService(edition, values);
   const label = (k: keyof LandlordDetails) => doc.details.find((d) => d.key === k)?.label ?? k;
 
   const block = (b: Block, i: number) => {

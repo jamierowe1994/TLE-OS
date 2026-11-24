@@ -25,6 +25,10 @@ import {
   type PlcDocument,
   type PlcState,
   type PlcTick,
+  type PlcNote,
+  type PlcNotesBefore,
+  type PlcLineAnswer,
+  PLC_LINES,
   type PlcAiSummary,
   type PropolyPush,
   type RexPush,
@@ -86,6 +90,9 @@ interface Row extends Record<string, unknown> {
   agent_moves: AgentMove[] | null;
   final_asks: FinalAsk[] | null;
   ticks: Partial<Record<CheckId, PlcTick>> | null;
+  check_notes: Record<string, PlcNote> | null;
+  notes_before: PlcNotesBefore[] | null;
+  line_ticks: Record<string, PlcLineAnswer> | null;
   ai_summary: PlcAiSummary | null;
   submitted_at: string | Date | null;
   scanned_at: string | Date | null;
@@ -130,6 +137,9 @@ function rowTo(r: Row): PlcCase {
     agentMoves: Array.isArray(r.agent_moves) ? r.agent_moves : [],
     finalAsks: Array.isArray(r.final_asks) ? r.final_asks : [],
     ticks: r.ticks && typeof r.ticks === "object" ? r.ticks : {},
+    notes: r.check_notes && typeof r.check_notes === "object" ? r.check_notes : {},
+    notesBefore: Array.isArray(r.notes_before) ? r.notes_before : [],
+    lines: r.line_ticks && typeof r.line_ticks === "object" ? r.line_ticks : {},
     aiSummary: r.ai_summary ?? null,
     propolyPush: r.propoly_push ?? null,
     rexPush: r.rex_push ?? null,
@@ -152,7 +162,7 @@ function rowTo(r: Row): PlcCase {
 const COLS = `id, application_ref, address, agent_name, agent_email, state,
               move_in_date, agent_note, documents, findings, waivers, propoly_push, rex_push, submitted_at,
               scanned_at, decided_at, decided_by, decision_note, created_at,
-              checked_at, checked_by, checked_by_email, check_note, rlp_wanted, rlp_request, let_type, file_keys, sent_anyway, final_asks, clauses, ticks, ai_summary, agent_moves`;
+              checked_at, checked_by, checked_by_email, check_note, rlp_wanted, rlp_request, let_type, file_keys, sent_anyway, final_asks, clauses, ticks, ai_summary, agent_moves, check_notes, notes_before, line_ticks`;
 
 /* ──────────────────────────── the file backend ──────────────────────────── */
 
@@ -849,6 +859,61 @@ export async function setTick(id: string, checkId: CheckId, tick: PlcTick | null
   });
 }
 
+/**
+ * A note on a check or one of Susan's lines (24 Nov 2026). Empty text clears
+ * it. Its own UPDATE, like the ticks, so a note never races a decision.
+ */
+export async function setNote(id: string, key: string, note: PlcNote | null): Promise<PlcCase> {
+  if (!checkById(key as CheckId) && !PLC_LINES.some((l) => l.id === key)) throw new PlcRefused("That isn't one of the checks.");
+  const current = await getCase(id);
+  if (!current) throw new PlcRefused("That handover no longer exists.");
+  if (!WITH_COMPLIANCE.includes(current.state)) throw new PlcRefused("Notes are for a pack that is with compliance.");
+  if (hasDb()) {
+    const rows = await q<Row>(
+      note
+        ? `UPDATE os_plc_cases SET check_notes = COALESCE(check_notes, '{}'::jsonb) || jsonb_build_object($2::text, $3::jsonb), updated_at = NOW()
+            WHERE id = $1 RETURNING ${COLS}`
+        : `UPDATE os_plc_cases SET check_notes = COALESCE(check_notes, '{}'::jsonb) - $2::text, updated_at = NOW()
+            WHERE id = $1 RETURNING ${COLS}`,
+      note ? [id, key, JSON.stringify(note)] : [id, key]
+    );
+    if (!rows[0]) throw new PlcRefused("That handover no longer exists.");
+    return rowTo(rows[0]);
+  }
+  return mutate(id, (c) => {
+    const notes = { ...(c.notes ?? {}) };
+    if (note) notes[key] = note;
+    else delete notes[key];
+    return { ...c, notes };
+  });
+}
+
+/** Yes, no or N/A on one of Susan's lines; null clears it. */
+export async function setLine(id: string, lineId: string, answer: PlcLineAnswer | null): Promise<PlcCase> {
+  if (!PLC_LINES.some((l) => l.id === lineId)) throw new PlcRefused("That isn't one of the lines.");
+  const current = await getCase(id);
+  if (!current) throw new PlcRefused("That handover no longer exists.");
+  if (!WITH_COMPLIANCE.includes(current.state)) throw new PlcRefused("The checklist is for a pack that is with compliance.");
+  if (hasDb()) {
+    const rows = await q<Row>(
+      answer
+        ? `UPDATE os_plc_cases SET line_ticks = COALESCE(line_ticks, '{}'::jsonb) || jsonb_build_object($2::text, $3::jsonb), updated_at = NOW()
+            WHERE id = $1 RETURNING ${COLS}`
+        : `UPDATE os_plc_cases SET line_ticks = COALESCE(line_ticks, '{}'::jsonb) - $2::text, updated_at = NOW()
+            WHERE id = $1 RETURNING ${COLS}`,
+      answer ? [id, lineId, JSON.stringify(answer)] : [id, lineId]
+    );
+    if (!rows[0]) throw new PlcRefused("That handover no longer exists.");
+    return rowTo(rows[0]);
+  }
+  return mutate(id, (c) => {
+    const lines = { ...(c.lines ?? {}) };
+    if (answer) lines[lineId] = answer;
+    else delete lines[lineId];
+    return { ...c, lines };
+  });
+}
+
 /** The AI summary, as written. Its own column, so a save beside it cannot drop it. */
 export async function saveAiSummary(id: string, summary: PlcAiSummary): Promise<PlcCase> {
   if (hasDb()) {
@@ -929,7 +994,16 @@ export async function recordPreflight(id: string, findings: Finding[]): Promise<
  * the waivers and the agent's own notes stay. The move is written down on the
  * pack (agent_moves), which is how compliance's screen can say "Resubmitted".
  */
-const WIPE_COMPLIANCE = `findings = '[]'::jsonb, scanned_at = NULL, checked_at = NULL, checked_by = NULL, checked_by_email = NULL,
+/* Notes are not wiped: they move to notes_before, so the next first check can
+   read what was said last time (James, 24 Nov 2026). The right-hand side of
+   every SET reads the row as it was, so the order here does not matter. */
+const WIPE_COMPLIANCE = `notes_before = COALESCE(notes_before, '[]'::jsonb) || CASE
+                WHEN COALESCE(check_notes, '{}'::jsonb) <> '{}'::jsonb OR COALESCE(check_note, '') <> ''
+                THEN jsonb_build_array(jsonb_build_object('at', to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+                       'notes', COALESCE(check_notes, '{}'::jsonb), 'checkNote', COALESCE(check_note, ''), 'checkedBy', checked_by))
+                ELSE '[]'::jsonb END,
+              check_notes = '{}'::jsonb, line_ticks = '{}'::jsonb,
+              findings = '[]'::jsonb, scanned_at = NULL, checked_at = NULL, checked_by = NULL, checked_by_email = NULL,
               check_note = '', ticks = '{}'::jsonb, ai_summary = NULL, final_asks = '[]'::jsonb, final_ask_lock = NULL`;
 
 async function agentMove(id: string, to: "assembling" | "cancelled", from: PlcState[], move: Omit<AgentMove, "at" | "from">, refused: string): Promise<PlcCase> {
@@ -963,6 +1037,12 @@ async function agentMove(id: string, to: "assembling" | "cancelled", from: PlcSt
       checkedByEmail: null,
       checkNote: "",
       ticks: {},
+      notes: {},
+      lines: {},
+      notesBefore:
+        Object.keys(c.notes ?? {}).length || c.checkNote
+          ? [...(c.notesBefore ?? []), { at, notes: c.notes ?? {}, checkNote: c.checkNote ?? "", checkedBy: c.checkedBy ?? null }]
+          : c.notesBefore ?? [],
       aiSummary: null,
       finalAsks: [],
       agentMoves: [...(c.agentMoves ?? []), { ...move, at, from: c.state } as AgentMove],
