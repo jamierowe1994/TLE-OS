@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import CrashScreen from "@/components/CrashScreen";
-import { autoReport } from "@/lib/auto-report";
+import { autoReport, whereItHappened } from "@/lib/auto-report";
 import { isLostConnection } from "@/lib/lost-connection";
 import { newBuildIsLive } from "@/lib/new-build";
 
@@ -39,7 +39,7 @@ export default function OsError({ error, reset }: { error: Error & { digest?: st
     void newBuildIsLive().then((isNew) => {
       if (!live) return;
       if (isNew) setUpdated(true);
-      else autoReport({ what: "screen crashed", message: `${error.message || "unknown"}${error.digest ? ` (digest ${error.digest})` : ""}` });
+      else autoReport({ what: "screen crashed", message: `${error.message || "unknown"}${error.digest ? ` (digest ${error.digest})` : ""}`, detail: whereItHappened({ error }) });
     });
     return () => {
       live = false;

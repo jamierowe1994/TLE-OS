@@ -56,6 +56,8 @@ export interface Failure {
   timedOut?: boolean;
   /** Set by logFailure: a screen that failed while REX was not answering. */
   duringRexOutage?: boolean;
+  /** A screen's own account of where it happened: the stack, what was open, the last steps (24 Nov 2026). */
+  detail?: Record<string, string | number | string[]> | null;
 }
 
 /**
@@ -208,7 +210,7 @@ export async function logFailure(f: Failure): Promise<void> {
     pending.set(fp, { n: 0, at: now, flush: null });
     if (pending.size > 5_000) pending.clear();
 
-    const last = JSON.stringify({ lastWhat: f.what, lastMessage: f.message.slice(0, 500), lastPath: f.path ?? null, lastWho: f.who ?? null });
+    const last = JSON.stringify({ lastWhat: f.what, lastMessage: f.message.slice(0, 500), lastPath: f.path ?? null, lastWho: f.who ?? null, ...(f.detail ? { lastDetail: f.detail } : {}) });
     const counted = await q<{ id: string }>(
       `UPDATE os_bugs
           SET occurrences = occurrences + $2, last_seen_at = NOW(),
@@ -227,7 +229,7 @@ export async function logFailure(f: Failure): Promise<void> {
         f.who ?? "",
         sentence(f),
         f.path ?? "",
-        JSON.stringify({ source: f.source, what: f.what, status: f.status ?? null, message: f.message.slice(0, 500), who: f.who ?? null }),
+        JSON.stringify({ source: f.source, what: f.what, status: f.status ?? null, message: f.message.slice(0, 500), who: f.who ?? null, ...(f.detail ? { detail: f.detail } : {}) }),
         fp,
         n,
       ]

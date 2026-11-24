@@ -6,7 +6,7 @@ import CrashScreen from "@/components/CrashScreen";
 import { note, trail } from "@/lib/trail";
 import { problemToast } from "@/lib/toast";
 import { explainFailure, serverWords } from "@/lib/plain-why";
-import { autoReport } from "@/lib/auto-report";
+import { autoReport, whereItHappened } from "@/lib/auto-report";
 
 /**
  * Keeps the trail, and notices when the OS goes quiet on somebody.
@@ -178,13 +178,13 @@ export default function Watchdog() {
        on app/(os)/error.tsx, which reports them there. */
     window.addEventListener("error", (e) => {
       if (leaving) return;
-      autoReport({ what: "script error", message: e.message || String(e.error ?? "unknown") });
+      autoReport({ what: "script error", message: e.message || String(e.error ?? "unknown"), detail: whereItHappened(e) });
     });
     window.addEventListener("unhandledrejection", (e) => {
       if (leaving) return;
       const r = e.reason as { message?: string; name?: string } | undefined;
       if (r?.name === "AbortError") return;
-      autoReport({ what: "promise nobody caught", message: r?.message || String(e.reason ?? "unknown") });
+      autoReport({ what: "promise nobody caught", message: r?.message || String(e.reason ?? "unknown"), detail: whereItHappened({ error: e.reason }) });
     });
   }, []);
 
