@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Mast } from "@/components/new-look/Parts";
-import { accessLine, useToolAccess, type Access } from "@/components/ToolsGrid";
+import { accessLine, openedEarly, useToolAccess, type Access } from "@/components/ToolsGrid";
 import { TOOL_GROUPS, toolsInGroup, type Tool } from "@/lib/tools";
 
 /**
@@ -62,6 +62,11 @@ const ICON: Record<string, React.ReactNode> = {
       <circle cx="15.5" cy="9" r="1.4" />
     </>
   ),
+  merch: (
+    <>
+      <path d="M9 3.5 4 6l1.5 5L7.5 10v10.5h9V10l2 1L20 6l-5-2.5a3 3 0 0 1-6 0z" />
+    </>
+  ),
   learning: (
     <>
       <path d="M4.5 5.5c2.5-1 5-1 7.5.5v13c-2.5-1.5-5-1.5-7.5-.5z" />
@@ -76,15 +81,15 @@ const Lock = () => (
   </svg>
 );
 
-function Tile({ tool, access, admin, i }: { tool: Tool; access: Access | null; admin: boolean; i: number }) {
+function Tile({ tool, access, admin, early, i }: { tool: Tool; access: Access | null; admin: boolean; early: boolean; i: number }) {
   /* The same rules as the old card: a gated tool fails shut until its answer is yes;
      a locked one with an admin preview opens for an admin, and says so. */
   const barred = Boolean(tool.gate) && (!access || !access.entitled);
-  const preview = tool.status === "locked" && Boolean(tool.adminPreview) && admin && Boolean(tool.href);
+  const preview = (tool.status === "locked" && Boolean(tool.adminPreview) && admin && Boolean(tool.href)) || early;
   const live = (tool.status === "live" || preview) && Boolean(tool.href) && !barred;
   const line = tool.gate && access ? accessLine(access) : null;
-  const tag = preview ? "Admin preview" : tool.status === "locked" ? "Locked" : tool.status === "building" ? "Being built" : null;
-  const foot = preview ? "Open to admins for demos. Agents still see it locked." : tool.status !== "live" ? tool.note : null;
+  const tag = early ? "Before launch" : preview ? "Admin preview" : tool.status === "locked" ? "Locked" : tool.status === "building" ? "Being built" : null;
+  const foot = early ? "Open to you before it launches. Everyone else still sees it locked." : preview ? "Open to admins for demos. Agents still see it locked." : tool.status !== "live" ? tool.note : null;
 
   const body = (
     <>
@@ -97,7 +102,7 @@ function Tile({ tool, access, admin, i }: { tool: Tool; access: Access | null; a
         <span className="nl-tl-tags">
           {tool.access === "paid" && <em className="nl-tl-tag">Paid</em>}
           {tag && (
-            <em className={`nl-tl-tag${tag === "Admin preview" ? " is-ink" : ""}`}>
+            <em className={`nl-tl-tag${tag === "Admin preview" || tag === "Before launch" ? " is-ink" : ""}`}>
               {tag !== "Being built" && <Lock />}
               {tag}
             </em>
@@ -132,7 +137,7 @@ function Tile({ tool, access, admin, i }: { tool: Tool; access: Access | null; a
 }
 
 export default function ToolsNew() {
-  const { access, admin } = useToolAccess();
+  const { access, admin, switched } = useToolAccess();
   let n = 0;
   return (
     <div data-look="new" className="nl-page nl-rise nl-tools nl-edge">
@@ -149,7 +154,7 @@ export default function ToolsNew() {
             </div>
             <div className="nl-tl-grid">
               {tools.map((t) => (
-                <Tile key={t.key} tool={t} access={t.gate ? access : null} admin={admin} i={n++} />
+                <Tile key={t.key} tool={t} access={t.gate ? access : null} admin={admin} early={openedEarly(t, switched)} i={n++} />
               ))}
             </div>
           </section>

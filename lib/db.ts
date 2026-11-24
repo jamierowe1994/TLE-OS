@@ -5253,6 +5253,22 @@ CREATE INDEX IF NOT EXISTS os_case_studies_agent ON os_case_studies (agent_rex_i
 -- any of type, beds, days, rent, let, advert (lib/case-study-shape HIDE_KEYS).
 ALTER TABLE os_case_studies ADD COLUMN IF NOT EXISTS hidden JSONB NOT NULL DEFAULT '[]';
 
+-- Merch orders (James, 24 Nov 2026): the team's kit, ordered from Tools > Merch.
+-- lines is [{product, name, colour, size, qty}]; no money is taken here, prices
+-- are James's to set. status is new, ordered, ready or collected (lib/merch).
+CREATE TABLE IF NOT EXISTS os_merch_orders (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL,
+  user_name   TEXT NOT NULL DEFAULT '',
+  user_email  TEXT NOT NULL DEFAULT '',
+  lines       JSONB NOT NULL DEFAULT '[]',
+  notes       TEXT NOT NULL DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'new',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_merch_orders_user ON os_merch_orders (user_id, created_at DESC);
+
 `;
 
 /* The schema runs as one batch in one implicit transaction, so every table it

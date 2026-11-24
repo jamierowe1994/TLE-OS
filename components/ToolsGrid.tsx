@@ -61,14 +61,14 @@ export function accessLine(a: Access): { text: string; strong: boolean } | null 
   }
 }
 
-function ToolCard({ tool, access, admin }: { tool: Tool; access: Access | null; admin: boolean }) {
+function ToolCard({ tool, access, admin, early }: { tool: Tool; access: Access | null; admin: boolean; early: boolean }) {
   /* Gated AND known to be barred means the tool cannot open, whatever its build
      state. Unknown access never opens the door either — a paid product must
      fail shut on the click and merely explain itself on the card. */
   const barred = Boolean(tool.gate) && (!access || !access.entitled);
   /* A locked tool with adminPreview opens for an admin, and the card says it
      is a preview so nobody mistakes it for released. */
-  const preview = tool.status === "locked" && Boolean(tool.adminPreview) && admin && Boolean(tool.href);
+  const preview = (tool.status === "locked" && Boolean(tool.adminPreview) && admin && Boolean(tool.href)) || early;
   const live = (tool.status === "live" || preview) && tool.href && !barred;
   const line = tool.gate && access ? accessLine(access) : null;
 
@@ -132,7 +132,7 @@ function ToolCard({ tool, access, admin }: { tool: Tool; access: Access | null; 
       ) : null}
       {preview ? (
         <p className="mt-2.5 border-t border-line/40 pt-2.5 text-[11.5px] leading-relaxed text-muted">
-          Open to admins for demos. Agents still see it locked.
+          {early ? "Open to you before it launches. Everyone else still sees it locked." : "Open to admins for demos. Agents still see it locked."}
         </p>
       ) : tool.status !== "live" && tool.note ? (
         <p className="mt-2.5 border-t border-line/40 pt-2.5 text-[11.5px] leading-relaxed text-muted">
@@ -155,9 +155,26 @@ function ToolCard({ tool, access, admin }: { tool: Tool; access: Access | null; 
 }
 
 /** Who is looking: whether they are an admin (Bond's preview) and their Launch Pad licence. Shared with the new look's tiles. */
-export function useToolAccess(): { access: Access | null; admin: boolean } {
+export function useToolAccess(): { access: Access | null; admin: boolean; switched: Record<string, boolean> } {
   const [access, setAccess] = useState<Access | null>(null);
   const [admin, setAdmin] = useState(false);
+  const [switched, setSwitched] = useState<Record<string, boolean>>({});
+
+  /* A tool locked behind a switch (lib/tools `look`) opens only on the server's
+     answer for this person - never on a ?look= pinned in this browser - and
+     stays locked until that answer comes. */
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/new-look", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { on?: Record<string, boolean> } | null) => {
+        if (alive && j?.on) setSwitched(j.on);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   /* Admin is decided on the actor (/api/auth/me canAdmin), so an owner viewing
      as an agent keeps the preview. Until it answers the card stays locked. */
@@ -195,11 +212,16 @@ export function useToolAccess(): { access: Access | null; admin: boolean } {
     };
   }, []);
 
-  return { access, admin };
+  return { access, admin, switched };
+}
+
+/** A locked tool its switch has opened for this person (lib/tools `look`). */
+export function openedEarly(tool: Tool, switched: Record<string, boolean>): boolean {
+  return tool.status === "locked" && Boolean(tool.look && switched[tool.look]) && Boolean(tool.href);
 }
 
 export default function ToolsGrid() {
-  const { access, admin } = useToolAccess();
+  const { access, admin, switched } = useToolAccess();
 
   return (
     <>
@@ -213,7 +235,7 @@ export default function ToolsGrid() {
             <p className="mt-1 max-w-xl text-[12.5px] leading-relaxed text-muted">{group.blurb}</p>
             <div className="mt-3.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {tools.map((t) => (
-                <ToolCard key={t.key} tool={t} access={t.gate ? access : null} admin={admin} />
+                <ToolCard key={t.key} tool={t} access={t.gate ? access : null} admin={admin} early={openedEarly(t, switched)} />
               ))}
             </div>
           </section>

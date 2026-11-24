@@ -49,7 +49,7 @@
  */
 export type ToolStatus = "live" | "building" | "locked";
 export type ToolAccess = "included" | "paid";
-export type ToolGroupKey = "daily" | "prospecting" | "money" | "learning";
+export type ToolGroupKey = "daily" | "prospecting" | "money" | "learning" | "team";
 
 export interface ToolGroup {
   key: ToolGroupKey;
@@ -79,6 +79,11 @@ export const TOOL_GROUPS: ToolGroup[] = [
     key: "learning",
     label: "Learning",
     blurb: "Getting better at the job: the training, the guides and the know-how, all in one place.",
+  },
+  {
+    key: "team",
+    label: "The Team",
+    blurb: "Kit with the name on it.",
   },
 ];
 
@@ -110,6 +115,14 @@ export interface Tool {
    * locked card, and the page itself sends them back to Tools.
    */
   adminPreview?: boolean;
+  /**
+   * A locked tool that opens for whoever its new-look switch covers (lib/new-look),
+   * asked of the server and never of a pinned ?look= in the browser. Merch is the
+   * first (James, 24 Nov 2026: "lock the merch store for now ... until we're ready
+   * to release"): set to Only me, it opens for James alone. Its page checks the
+   * same switch on the server, so a typed address is sent back to Tools too.
+   */
+  look?: "merch";
 }
 
 export const TOOLS: Tool[] = [
@@ -225,6 +238,18 @@ export const TOOLS: Tool[] = [
     status: "live",
     access: "included",
     group: "learning",
+  },
+  {
+    key: "merch",
+    name: "Merch",
+    blurb: "Jackets, hoodies and mugs with the name on. Pick your size and colour and put your order in.",
+    icon: "note",
+    href: "/tools/merch",
+    status: "locked",
+    note: "Locked until it launches.",
+    look: "merch",
+    access: "included",
+    group: "team",
   },
 ];
 
