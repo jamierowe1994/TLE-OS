@@ -95,6 +95,16 @@ export default function FieldDate({
     return [...Array.from({ length: lead }, () => null), ...Array.from({ length: days }, (_, i) => ymd(new Date(shown.y, shown.m, i + 1)))];
   }, [shown]);
 
+  /* Every year the list can reach: a hundred back (a date of birth) unless
+     the field says nothing earlier counts, and twenty on (the longest a
+     certificate or a lease runs). Worked out from today, never a fixed year. */
+  const years = useMemo(() => {
+    const now = new Date().getFullYear();
+    const from = Math.min(min ? Number(min.slice(0, 4)) : now - 100, shown.y);
+    const to = Math.max(now + 20, shown.y);
+    return Array.from({ length: to - from + 1 }, (_, i) => from + i);
+  }, [min, shown.y]);
+
   const pickDay = (d: string) => {
     if (!withTime) { onChange(d); setOpen(false); return; }
     onChange(`${d}T${time || "09:00"}`);
@@ -138,7 +148,28 @@ export default function FieldDate({
                 <button type="button" onClick={() => step(-1)} aria-label="Previous month" className="flex h-7 w-7 items-center justify-center rounded-full text-muted hover:bg-panel hover:text-ink">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 6l-6 6 6 6" /></svg>
                 </button>
-                <p className="text-[13px] font-semibold">{MONTHS[shown.m]} {shown.y}</p>
+                {/* A certificate runs out five or ten years on, and the only way
+                    there was "Next month" sixty or a hundred and twenty times
+                    (Sean McMahon, ticket 7beb732c, 23 Nov 2026). The month and
+                    the year are now picked straight from a list. */}
+                <div className="flex items-center gap-1">
+                  <select
+                    value={shown.m}
+                    onChange={(e) => setShown((s) => ({ ...s, m: Number(e.target.value) }))}
+                    aria-label="Month"
+                    className="cursor-pointer appearance-none rounded-md bg-transparent px-1.5 py-0.5 text-[13px] font-semibold outline-none hover:bg-panel focus-visible:bg-panel"
+                  >
+                    {MONTHS.map((name, i) => <option key={name} value={i}>{name}</option>)}
+                  </select>
+                  <select
+                    value={shown.y}
+                    onChange={(e) => setShown((s) => ({ ...s, y: Number(e.target.value) }))}
+                    aria-label="Year"
+                    className="cursor-pointer appearance-none rounded-md bg-transparent px-1.5 py-0.5 text-[13px] font-semibold tabular-nums outline-none hover:bg-panel focus-visible:bg-panel"
+                  >
+                    {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
                 <button type="button" onClick={() => step(1)} aria-label="Next month" className="flex h-7 w-7 items-center justify-center rounded-full text-muted hover:bg-panel hover:text-ink">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9 6l6 6-6 6" /></svg>
                 </button>
