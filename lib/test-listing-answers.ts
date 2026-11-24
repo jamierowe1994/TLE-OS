@@ -54,6 +54,7 @@ export async function testDetails(id: number): Promise<{ ok: true; details: List
     propertyTypeId: null,
     agentLarn: null,
     propertyTypeRowId: null,
+    propertyTypeExtraRowIds: [],
     record: { osPropertyId: null, factsKey: null, landlordName: null, landlordRegistration: null, landlordRegistrationExpiry: {}, landlordRegistrationOwner: {}, epc: null, scotland: false },
     material: { electricity: "Mains", water: "Mains", sewerage: "Mains", broadband: "Fibre", gas: "Mains" },
     agent: { id: null, name: null, phone: null, email: null },
