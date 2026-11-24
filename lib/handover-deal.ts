@@ -199,7 +199,10 @@ export function dealDefaults(packet: Handoff, listing: Row): DealTerms {
 function dealDefaultsFor(packet: Handoff, listing: Row): DealTerms {
   const scotland = isScottishListing(listing, packet);
   const related = (listing.related ?? {}) as Row;
-  const subcats = Array.isArray(related.listing_subcategories) ? (related.listing_subcategories as Row[]) : [];
+  /* The priority-1 row, as lib/listing-details reads it (ticket 7c3c4c34). */
+  const subcats = Array.isArray(related.listing_subcategories)
+    ? (related.listing_subcategories as Row[]).slice().sort((a, b) => (Number(a.priority) || 999) - (Number(b.priority) || 999))
+    : [];
   const type = text(subcats[0]?.subcategory) ?? text((listing.property as Row | null)?.property_subcategory);
   const hmo = isHmoType(type);
   const bond = Number(listing.price_bond);

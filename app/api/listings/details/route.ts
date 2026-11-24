@@ -341,10 +341,16 @@ export async function PATCH(req: NextRequest) {
        id keeps it an update rather than a second type beside the first. */
     if (propertyTypeId) {
       const now = await readListingDetails(id).catch(() => null);
-      if (now?.propertyTypeId !== propertyTypeId) {
-        const row = { ...(now?.propertyTypeRowId ? { id: now.propertyTypeRowId } : {}), priority: 1, subcategory: { id: propertyTypeId } };
+      /* Any second row goes, or the old type stays first and comes back on
+         the next read (ticket 7c3c4c34): a listing saved before that fix can
+         hold both. */
+      const extras = now?.propertyTypeExtraRowIds ?? [];
+      if (now?.propertyTypeId !== propertyTypeId || extras.length) {
+        const asId = (x: string) => (/^\d+$/.test(x) ? Number(x) : x);
+        const row = { ...(now?.propertyTypeRowId ? { id: asId(now.propertyTypeRowId) } : {}), priority: 1, subcategory: { id: propertyTypeId } };
+        const gone = extras.map((x) => ({ id: asId(x), destroy: true }));
         const listing = (plan.listing ?? { id }) as Record<string, unknown>;
-        plan.listing = { ...listing, related: { ...((listing.related as Record<string, unknown>) ?? {}), listing_subcategories: [row] } };
+        plan.listing = { ...listing, related: { ...((listing.related as Record<string, unknown>) ?? {}), listing_subcategories: [row, ...gone] } };
       }
     }
     if (!plan.listing && !plan.property) {

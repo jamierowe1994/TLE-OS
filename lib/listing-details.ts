@@ -87,6 +87,8 @@ export interface ListingDetails {
   /** REX's listing subcategory: its id, and the related row's id for an update. */
   propertyTypeId: string | null;
   propertyTypeRowId: string | null;
+  /** Any further subcategory rows on the listing, removed when the type is changed (ticket 7c3c4c34). */
+  propertyTypeExtraRowIds: string[];
   /** The listing agent's Letting Agent Registration Number, as the OS holds it (Scotland). */
   agentLarn: string | null;
   /** What the OS's own property record holds for this home (lib/listing-record). */
@@ -124,6 +126,8 @@ const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? 
  *  the multi-value ones (electricity, broadband): the first is the answer. */
 const text = (v: unknown): string | null =>
   Array.isArray(v) ? text(v[0]) : v && typeof v === "object" ? str((v as Obj).text) : str(v);
+/** A REX id, which comes back as a number on related rows and a string elsewhere. */
+const rexId = (v: unknown): string | null => (typeof v === "number" && Number.isFinite(v) ? String(v) : str(v));
 const yesNo = (v: unknown): string | null => (v === "yes" || v === true || v === 1 ? "Yes" : v === "no" || v === false || v === 0 ? "No" : text(v));
 /** REX hands back protocol-relative CDN addresses. */
 const abs = (u: unknown): string | null => {
@@ -272,7 +276,14 @@ export async function readListingDetails(id: number, opts: { cached?: boolean } 
         .map((h) => str(h.description))
         .filter((h): h is string => h !== null)
     : [];
-  const subcats = Array.isArray(related.listing_subcategories) ? (related.listing_subcategories as Obj[]) : [];
+  /* The type the portals take is the priority-1 row. The row's own id comes
+     back as a number, which str() dropped, so a change of type was sent with
+     no row id and REX added a second row beside the first: a home kept
+     going back to Duplex, the type Zoopla refuses (Sean McMahon, ticket
+     7c3c4c34, 24 Nov 2026). */
+  const subcats = Array.isArray(related.listing_subcategories)
+    ? (related.listing_subcategories as Obj[]).slice().sort((a, b) => (num(a.priority) ?? 999) - (num(b.priority) ?? 999))
+    : [];
   const agent = (l.listing_agent_1 ?? {}) as Obj;
   const street = [str(p.adr_unit_number), str(p.adr_street_number), str(p.adr_street_name)].filter(Boolean).join(" ");
   const town = str(p.adr_suburb_or_town) ?? "";
@@ -302,8 +313,9 @@ export async function readListingDetails(id: number, opts: { cached?: boolean } 
     baths: num(p.attr_bathrooms),
     receptions: num(p.attr_living_areas),
     propertyType: text((subcats[0] ?? {}).subcategory) ?? text(p.property_subcategory),
-    propertyTypeId: str(((subcats[0] ?? {}).subcategory as Obj | null)?.id),
-    propertyTypeRowId: str((subcats[0] ?? {}).id),
+    propertyTypeId: rexId(((subcats[0] ?? {}).subcategory as Obj | null)?.id),
+    propertyTypeRowId: rexId((subcats[0] ?? {}).id),
+    propertyTypeExtraRowIds: subcats.slice(1).map((r) => rexId(r.id)).filter((x): x is string => x !== null),
     letType: text(l.let_type),
     service: (await introP) ? "Marketing only" : text(l.lettings_service_type),
     serviceOnRecord: text(l.lettings_service_type),
