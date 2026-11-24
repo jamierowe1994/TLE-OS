@@ -261,6 +261,36 @@
 /* The new-look card's form is spaced by margins, not a gap. */
 .nl-st-report .sv-fix { margin-top: 10px; }
 .nl-st-report .sv-fix-anyway { display: block; margin: 6px auto 0; }
+/* Steve finds what's missing (components/steve/SteveFind). Read only: no
+   field on it can be typed in, only Yes or No. */
+.sv-find-busy { display: flex; align-items: center; gap: 8px; }
+.sv-find-spin {
+  flex: none; width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--ink);
+  animation: sv-find-spin 0.8s linear infinite; display: inline-block; vertical-align: -2px;
+}
+.sv-find-spin.is-light { border-color: color-mix(in srgb, var(--on-primary) 35%, transparent); border-top-color: var(--on-primary); }
+@keyframes sv-find-spin { to { transform: rotate(360deg); } }
+.sv-find-people { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sv-find-people li { padding: 9px 11px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+.sv-find-name { margin: 0; font-size: 14px; line-height: 19px; color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+.sv-find-role { font-weight: 400; color: var(--muted); margin-right: 4px; }
+.sv-find-line { margin: 1px 0 0; font-size: 13px; line-height: 18px; color: var(--ink); overflow-wrap: anywhere; }
+.sv-find-from { margin: 5px 0 0; font-size: 12px; line-height: 16px; color: var(--muted); }
+.sv-find-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.sv-find-yes, .sv-find-no {
+  flex: 1 1 auto; min-width: 0; padding: 9px 14px; border-radius: 999px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; transition: background-color 0.2s, opacity 0.2s;
+}
+.sv-find-yes { border: 0; background: var(--primary); color: var(--on-primary); }
+.sv-find-yes:hover:not(:disabled) { background: var(--accent-dark); }
+.sv-find-no { border: 1px solid var(--line-strong); background: var(--card); color: var(--ink); }
+.sv-find-no:hover:not(:disabled) { border-color: var(--ink); }
+.sv-find-yes:disabled, .sv-find-no:disabled { opacity: 0.5; cursor: default; }
+.sv-find.is-compact { margin-top: 10px; }
+.sv-find-yes.is-fit { flex: 0 0 auto; padding-inline: 22px; }
+/* On a page, not in Steve's card: the box spans the page and the buttons keep to their words. */
+.sv-find.is-compact .sv-find-yes, .sv-find.is-compact .sv-find-no { flex: 0 1 auto; padding-inline: 20px; }
+@media (prefers-reduced-motion: reduce) { .sv-find-spin { animation-duration: 2.4s; } }
 @keyframes sv-fix-in { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sv-fix { animation: none; } }
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import FloatSheet, { FloatCard, FloatFoot } from "@/components/new-look/FloatSheet";
 import { Badge, type Tone } from "@/components/new-look/Parts";
 import { ErrorLine, Loading, Section, Tab, nd, when } from "@/components/new-look/admin/bits";
+import SteveFills from "@/components/new-look/admin/SteveFills";
 
 /**
  * Admin > Issues > Tickets in the new look (24 Oct 2026). A broken, B
@@ -583,6 +584,8 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
           <Section title={<>Logged by the OS Itself <span className="nl-count">{os.length}</span></>}>
             {os.length === 0 ? <p className="nl-empty">Nothing open.</p> : <ul className="nl-adm-rows">{os.map(row)}</ul>}
           </Section>
+
+          <SteveFills />
         </>
       )}
 

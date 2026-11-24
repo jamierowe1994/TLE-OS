@@ -81,6 +81,10 @@ export type AuditKind =
   /* A landlord typed onto a home's own OS record where REX names nobody
      (15 Oct 2026, lib/record-landlords). Not mirrored to REX. */
   | "record_landlord_saved"
+  /* Steve found a missing landlord or tenant's details and the agent said yes
+     (lib/steve-find, 24 Nov 2026), or James undid one. OS only. */
+  | "steve_filled"
+  | "steve_fill_undone"
   | "property_person_added"
   | "property_person_changed"
   | "property_person_removed"

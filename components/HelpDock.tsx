@@ -2,6 +2,8 @@
 
 import { GUIDE_EVENT, guideReachable } from "@/lib/steve-guide";
 import { deflectionFor, EDIT_SAYS, type Deflection } from "@/lib/report-deflect";
+import { findableFor, type FindOutcome, type FindWho } from "@/lib/steve-find-shared";
+import SteveFind, { outcomeLine } from "@/components/steve/SteveFind";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import AssistantCharacter, { type Mood } from "@/components/AssistantCharacter";
@@ -208,6 +210,9 @@ const POST_BADGE: Record<string, string> = {
 
 /** The newest post this browser has already been shown. See NEWS_SEEN below. */
 const NEWS_SEEN = "os-news-seen";
+
+/** What the report form offers before it sends: an Edit, an answer, or Steve finding what is missing. */
+type Offer = Deflection | { kind: "find"; who: FindWho | null };
 
 type Line = {
   role: "agent" | "assistant";
@@ -532,11 +537,21 @@ function Dock() {
      question he was given first, so the same words are not offered him again. */
   const fixitOn = useNewLook("fixit") === true;
   const fixit = lookNew && fixitOn;
-  const [offer, setOffer] = useState<Deflection>(null);
+  /* Steve finds what's missing (lib/steve-find-shared, James 24 Nov 2026), its
+     own switch: a landlord or tenant missing on a home or a listing gets
+     "Let Steve Find It" first, and `finding` is his card open in the form. */
+  const findSwitch = useNewLook("stevefind") === true;
+  const findOn = lookNew && findSwitch;
+  const [finding, setFinding] = useState<{ who: FindWho | null } | null>(null);
+  const [offer, setOffer] = useState<Offer>(null);
   const asked = useRef("");
   const reporting = open && (orb ? orbView === "report" : tab === "feedback");
   const offerFor = useCallback(
-    (words: string): Deflection => {
+    (words: string): Offer => {
+      if (findOn) {
+        const f = findableFor(words, path);
+        if (f) return { kind: "find", who: f.who };
+      }
       if (!fixit) return null;
       const d = deflectionFor(words, path, (guide) => guideReachable(guide, document));
       /* He answers only when he can, and never mid-introduction, where the
@@ -544,7 +559,7 @@ function Dock() {
       if (d?.kind === "ask" && (!live || stage !== "ask" || words.trim() === asked.current)) return null;
       return d;
     },
-    [fixit, path, live, stage]
+    [fixit, findOn, path, live, stage]
   );
   useEffect(() => {
     if (!reporting) return;
@@ -1491,7 +1506,7 @@ function Dock() {
   /** `past`: what the form offered instead, when it was sent anyway - a
    *  route to an Edit, or "ask" with whether Steve answered first. Kept on
    *  the report, so the reports that still came show what was turned down. */
-  async function sendFeedback(past?: { offered: string; answered?: boolean }) {
+  async function sendFeedback(past?: { offered: string; answered?: boolean; steveFind?: FindOutcome }) {
     setBusy(true);
     setMood("thinking");
     /* A picture of what they were looking at, taken before the report goes.
@@ -1512,7 +1527,7 @@ function Dock() {
       body: JSON.stringify({
         /* A recording with no words is still a report: somebody who talked it
            through out loud has already said what happened. */
-        body: fb.trim() || (rec.clip ? "Screen recording attached." : "Picture attached."),
+        body: [fb.trim() || (rec.clip ? "Screen recording attached." : "Picture attached."), outcomeLine(past?.steveFind)].filter(Boolean).join("\n\n"),
         path,
         kind,
         shot,
@@ -1558,6 +1573,7 @@ function Dock() {
     setSent(true);
     setFb("");
     setOffer(null);
+    setFinding(null);
     asked.current = "";
     setPics([]);
     setPicNote("");
@@ -1583,15 +1599,35 @@ function Dock() {
    */
   function pressSend() {
     const now = offerFor(fb);
-    const same = (now?.kind ?? null) === (offer?.kind ?? null) && (now?.kind !== "edit" || offer?.kind !== "edit" || now.guide === offer.guide);
+    const same =
+      (now?.kind ?? null) === (offer?.kind ?? null) &&
+      (now?.kind !== "edit" || offer?.kind !== "edit" || now.guide === offer.guide) &&
+      (now?.kind !== "find" || offer?.kind !== "find" || now.who === offer.who);
     if (!same) setOffer(now);
+    else if (offer?.kind === "find") setFinding({ who: offer.who });
     else if (offer?.kind === "edit") showEdit(offer.guide);
     else if (offer?.kind === "ask") void askFirst();
     else void sendFeedback();
   }
 
   /** What "Send it to James anyway" records the form offered. */
-  const turnedDown = offer ? { offered: offer.kind === "edit" ? offer.guide : "ask" } : undefined;
+  const turnedDown = offer ? { offered: offer.kind === "edit" ? offer.guide : offer.kind } : undefined;
+
+  /** Steve put it in: the report needn't go, so the form closes as a sent one does. */
+  function foundAndSaved() {
+    react("happy", 1600);
+    window.setTimeout(() => {
+      setFinding(null);
+      setOffer(null);
+      setFb("");
+      setPics([]);
+      setPicNote("");
+      rec.clear();
+      setOpen(false);
+      setMood("idle");
+      rest();
+    }, 2600);
+  }
 
   /** Show me where: Steve's guide rings the Edit (components/SteveGuide) and
    *  closes this card itself. It belongs to this record, so leaving the page
@@ -1997,20 +2033,29 @@ function Dock() {
   /* Put it right yourself (lib/report-deflect): his word above the send, in
      both report forms, and the button saying what a press now does. Styles
      in app/new-look/steve-panel.css (sv-fix). */
-  const fixCard = offer && !busy ? (
+  const fixCard = finding ? (
+    <SteveFind
+      path={path}
+      who={finding.who}
+      onSaved={(n) => n > 0 && foundAndSaved()}
+      onSend={(steveFind) => void sendFeedback({ offered: "find", steveFind })}
+    />
+  ) : offer && !busy ? (
     <div className="sv-fix" role="status">
       <SteveFace size={30} mood="happy" />
       <div className="min-w-0">
-        <p className="sv-fix-h">{offer.kind === "edit" ? "You Can Put This Right Yourself" : "I Can Answer That Now"}</p>
+        <p className="sv-fix-h">{offer.kind === "find" ? "I Can Look for This" : offer.kind === "edit" ? "You Can Put This Right Yourself" : "I Can Answer That Now"}</p>
         <p className="sv-fix-p">
-          {offer.kind === "edit"
+          {offer.kind === "find"
+            ? "Missing details are usually already in PayProp, Propoly or the home's file. I'll find them, and you check it's the right person."
+            : offer.kind === "edit"
             ? `${EDIT_SAYS[offer.guide] ?? "Edit on this record changes it."} It saves straight away, no need to wait for James.`
             : "It reads like a question, so I'll answer it first. If I can't help, it still goes to James."}
         </p>
       </div>
     </div>
   ) : null;
-  const sendLabel = busy ? sending || "Sending…" : offer?.kind === "edit" ? "Show me where" : offer?.kind === "ask" ? `Ask ${aName}` : "Send it";
+  const sendLabel = busy ? sending || "Sending…" : offer?.kind === "find" ? `Let ${aName} Find It` : offer?.kind === "edit" ? "Show me where" : offer?.kind === "ask" ? `Ask ${aName}` : "Send it";
 
   const reportView =
     sent ? (
@@ -2179,6 +2224,7 @@ function Dock() {
       )}
 
       {fixCard}
+      {!finding && (
       <button
         type="button"
         disabled={busy || !(fb.trim() || rec.clip || pics.length)}
@@ -2187,7 +2233,8 @@ function Dock() {
       >
         {sendLabel}
       </button>
-      {offer && !busy && (
+      )}
+      {offer && !busy && !finding && (
         <button type="button" onClick={() => void sendFeedback(turnedDown)} className="sv-fix-anyway">
           Send it to James anyway
         </button>
@@ -2362,10 +2409,12 @@ function Dock() {
       )}
 
       {fixCard}
-      <button type="button" disabled={busy || !(fb.trim() || rec.clip || pics.length)} onClick={pressSend} className="sv-rp-send">
-        {sendLabel}
-      </button>
-      {offer && !busy && (
+      {!finding && (
+        <button type="button" disabled={busy || !(fb.trim() || rec.clip || pics.length)} onClick={pressSend} className="sv-rp-send">
+          {sendLabel}
+        </button>
+      )}
+      {offer && !busy && !finding && (
         <button type="button" onClick={() => void sendFeedback(turnedDown)} className="sv-fix-anyway">
           Send it to James anyway
         </button>

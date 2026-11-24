@@ -72,6 +72,7 @@ import { Badge, Tabs, Menu, Ico, type MenuItem, type Tone } from "@/components/n
 import PhotoGrid from "@/components/new-look/PhotoGrid";
 import type { IncomingLet, NextTenancy } from "@/app/api/portfolio/incoming/route";
 import HomeSwitch from "@/components/HomeSwitch";
+import FindMissing from "@/components/steve/FindMissing";
 import LandlordRegistration, { type RegRecord } from "@/components/listing/LandlordRegistration";
 import { isScottish } from "@/lib/property-flags";
 
@@ -195,6 +196,18 @@ function Loading({ label }: { label: string }) {
       {label}
     </p>
   );
+}
+/** What is blank on a home's people, in words, for Find It. Null when nothing is. */
+function missingOn(p: ManagedProperty, tenants: Party[], comingIn: boolean): string | null {
+  const gaps: string[] = [];
+  const parts = (x: { email: string | null; phone: string | null }) => (!x.email && !x.phone ? "email and mobile" : !x.email ? "email" : "mobile");
+  if (!p.landlord) gaps.push("No landlord on the home");
+  else if (!p.landlord.email || !p.landlord.phone) gaps.push(`The landlord's ${parts(p.landlord)}`);
+  const short = tenants.filter((t) => !t.email || !t.phone);
+  if (!tenants.length && !p.vacantSince && !comingIn) gaps.push("No tenant on the home");
+  else if (short.length === 1) gaps.push(`${short[0].name}'s ${parts(short[0])}`);
+  else if (short.length > 1) gaps.push(`${short.length} tenants' emails or mobiles`);
+  return gaps.length ? gaps.join(". ") : null;
 }
 function Failed({ error }: { error: string }) {
   return <p className="text-[12.5px] text-accent-dark">{error}</p>;
@@ -1546,6 +1559,18 @@ export default function PropertyPage() {
                   <div className="nl-tabhead-acts">{head.acts}</div>
                 </div>
               )}
+              {/* Steve finds what's missing (components/steve/FindMissing, James 24 Nov 2026): the whole width, above the people. */}
+              {tab === "overview" && (!house || roomP) ? (
+                <FindMissing
+                  path={`/portfolio/${encodeURIComponent(p.listingId)}`}
+                  home={title}
+                  gaps={p.test ? null : missingOn(p, tenants, Boolean(comingIn))}
+                  onSaved={() => {
+                    setBookRev((n) => n + 1);
+                    setRegRev((r) => r + 1);
+                  }}
+                />
+              ) : null}
               {tab === "overview" && (
                 <div className="nl-bento">
                   {/* The people, stacked (James, 8 Nov 2026: "stack the tenants on top
