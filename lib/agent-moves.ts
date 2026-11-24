@@ -196,6 +196,19 @@ export async function withAgentMoves(book: ManagedBook, rexUserId: string | null
       have.add(p.listingId);
       touched = true;
     }
+    /* THE HOME ONCE, AS THE LET (Sean McMahon, 24 Nov 2026, tickets 20ae25c5
+       and 82078c0d). A home moved to this agent whose REX listing is another
+       agent's stands in their own book as its REX PM record ("pm-link-<REX
+       property>", no landlord, no let date), and the let brought in above
+       stood beside it: two rows for one home, and the agent's link opened the
+       empty one - "No landlord held" over a landlord the let names. The whole
+       book has only the let, so the let is kept here too; the page forwards
+       an old pm-link address to it. */
+    const letFor = new Set(kept.filter((p) => p.propertyId && !String(p.listingId).startsWith("pm-")).map((p) => String(p.propertyId)));
+    for (let i = kept.length - 1; i >= 0; i--) {
+      const id = String(kept[i].listingId);
+      if (id.startsWith("pm-link-") && letFor.has(id.slice("pm-link-".length))) { kept.splice(i, 1); touched = true; }
+    }
   }
   return touched ? recountBook(book, kept) : book;
 }

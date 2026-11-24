@@ -630,7 +630,28 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
      service we look after, is ours until the next read says otherwise. Let
      Only stays out, as it does on REX PM's list. */
   const pmReadDay = pm ? pm.reduce((m, h) => (h.pmReadAt && h.pmReadAt > m ? h.pmReadAt : m), "").slice(0, 10) : "";
-  const newSincePm = (p: ManagedProperty) => Boolean(pmReadDay && p.letSince && p.letSince > pmReadDay && MANAGED_SERVICES.has(p.service ?? ""));
+  /* MARKED LET JUST BEFORE THE READ, MOVED IN AFTER IT (Kirstie Mulholland,
+     24 Nov 2026, ticket 4e915e58). A home marked let in REX on 1 Oct, the
+     day before REX PM's list was read, whose tenant moved in on 6 Nov, was
+     on neither: REX PM didn't hold it yet and its let date wasn't after the
+     read. Propoly says when the tenancy began, so a managed letting is ours
+     too where Propoly completed a managed or rent-collect tenancy at its
+     address after the read, within three months of REX's let mark (so an
+     older let of the same home is not brought back with it). Tenant Find
+     stays out, as Let Only does. */
+  const DAY = 86_400_000;
+  const laterMoveIns = pmReadDay
+    ? ((await (await import("@/lib/business/propoly-deals")).getPropolyCompletes().catch(() => null)) ?? []).filter(
+        (c) => c.address && c.date && c.date.slice(0, 10) > pmReadDay && (c.service === "full_managed" || c.service === "rent_collect")
+      )
+    : [];
+  const movedInSincePm = (p: ManagedProperty) =>
+    Boolean(p.letSince && MANAGED_SERVICES.has(p.service ?? "")) &&
+    laterMoveIns.some((c) => {
+      const gap = (Date.parse(c.date!.slice(0, 10)) - Date.parse(p.letSince!.slice(0, 10))) / DAY;
+      return gap >= 0 && gap <= 92 && sameHome(c.address!, p.locality ? `${p.name}, ${p.locality}` : p.address || p.name);
+    });
+  const newSincePm = (p: ManagedProperty) => Boolean(pmReadDay && p.letSince && ((p.letSince > pmReadDay && MANAGED_SERVICES.has(p.service ?? "")) || movedInSincePm(p)));
   const properties = lets.filter((p) => p.listingId && !intro.has(String(p.listingId)) && (!pmRexIds || (p.propertyId && (pmRexIds.has(p.propertyId) || newSincePm(p)))));
 
   /**
