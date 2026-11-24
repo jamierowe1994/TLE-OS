@@ -6,7 +6,8 @@ import { hasDb, q } from "@/lib/db";
 import { sendEmail, ResendBlocked } from "@/lib/resend";
 import { editableEmailText, renderTleEmailLive, type EmailEdit } from "@/lib/email/tle-emails";
 import { TENANT_FIRST_NAME, categoryName, certDatesOf, coversOf, dueDayOf } from "@/lib/works-catalogue";
-import { accountsInvoiceEmail, complianceJobEmail, landlordInvoiceAnswerEmail } from "@/lib/email/works-internal";
+import { accountsInvoiceEmail, complianceJobEmail, invoiceWaitingEmail, landlordInvoiceAnswerEmail } from "@/lib/email/works-internal";
+import { agentFor } from "@/lib/works-agent";
 import { bankForInvoice } from "@/lib/contractor-bank";
 import { recentBankChanges } from "@/lib/bank-vault";
 import type { BankDetails } from "@/lib/bank";
@@ -56,7 +57,7 @@ import { refusedSender } from "@/lib/not-a-sender";
  */
 
 export interface SendOutcome {
-  to: "contractor" | "tenant" | "landlord" | "accounts" | "compliance";
+  to: "contractor" | "tenant" | "landlord" | "accounts" | "compliance" | "agent";
   sent: boolean;
   address?: string;
   reason?: string;
@@ -479,6 +480,38 @@ export async function tellAccounts(o: WorksOrder, accountsEmail: string): Promis
     return { to: "accounts", sent: true, address, via: "internal sender" };
   } catch (e) {
     return { to: "accounts", sent: false, address, reason: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "the email did not send" };
+  }
+}
+
+/**
+ * Who checks a contractor's own invoice before accounts hear of it (Sean
+ * McMahon, 23 Nov 2026: "the agent (ie the business owner) should check the
+ * works and invoice"). The home's agent first; failing that, whoever of our
+ * people works the job (lib/works-agent: who raised it, who last moved it).
+ * Null means nobody fits, and it goes to the office inbox.
+ */
+export async function invoiceChecker(o: WorksOrder): Promise<{ name: string; email: string } | null> {
+  const homes = await propertyAgentFor(o).catch(() => null);
+  if (homes?.email.includes("@")) return homes;
+  const works = await agentFor(o).catch(() => null);
+  return works?.email?.includes("@") ? { name: works.name || works.email, email: works.email.trim() } : null;
+}
+
+/** The checker's email: an invoice is waiting for them. To the office inbox when the home has no agent here. */
+export async function tellInvoiceWaiting(o: WorksOrder, checker: { name: string; email: string } | null): Promise<SendOutcome> {
+  const settings = await invoiceSettings();
+  const office = (settings.accountsEmail ?? "").trim() || settings.complianceEmail.trim();
+  const address = checker?.email ?? office;
+  const name = checker?.name ?? "The office";
+  if (!address.includes("@")) return { to: "agent", name, sent: false, reason: "there is no agent on this home in the OS and no office inbox is set under Maintenance, Invoices" };
+  const mail = invoiceWaitingEmail(o, { office: !checker });
+  if (o.rehearsal) return { ...(await keep(o.id, "agent", address, mail.subject, mail.html)), name };
+  try {
+    const attachments = await invoiceAttachments(o);
+    await sendEmail({ to: address, subject: mail.subject, html: mail.html, text: mail.text, ...(attachments.length ? { attachments } : {}) });
+    return { to: "agent", name, sent: true, address, via: "internal sender" };
+  } catch (e) {
+    return { to: "agent", name, sent: false, address, reason: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "the email did not send" };
   }
 }
 

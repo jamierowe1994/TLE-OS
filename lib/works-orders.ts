@@ -257,6 +257,24 @@ export interface WorksOrder {
   invoicePence: number | null;
   invoiceRef: string;
   invoicedAt: string | null;
+  /* ── the agent passes a contractor's own invoice (Sean McMahon, 23 Nov 2026) ──
+     What a contractor uploads from their page waits here, off invoicePence,
+     until the home's agent has checked it. Nothing that counts, lists or pays
+     invoices reads these, so accounts cannot pay one nobody has looked at. */
+  /** The contractor's figure, waiting for the agent. Null once passed or sent back. */
+  invoiceWaitPence: number | null;
+  invoiceWaitRef: string;
+  invoiceWaitAt: string | null;
+  /** The email of whoever was asked to check it; "" when it went to the office. */
+  invoiceWaitFor: string;
+  /** Sent back to the contractor: when, why and by whom. Cleared when they upload again. */
+  invoiceDeclinedAt: string | null;
+  invoiceDeclinedNote: string;
+  invoiceDeclinedBy: string;
+  invoiceApprovedAt: string | null;
+  invoiceApprovedBy: string;
+  /** What the agent adds for arranging the work. The landlord is charged invoicePence plus this. */
+  agentSharePence: number | null;
   paidAt: string | null;
   paidHow: PaidHow | null;
   cancelledReason: string;
@@ -380,6 +398,16 @@ function toOrder(r: Row): WorksOrder {
     invoicePence: n(r.invoice_pence),
     invoiceRef: s(r.invoice_ref),
     invoicedAt: iso(r.invoiced_at),
+    invoiceWaitPence: n(r.invoice_wait_pence),
+    invoiceWaitRef: s(r.invoice_wait_ref),
+    invoiceWaitAt: iso(r.invoice_wait_at),
+    invoiceWaitFor: s(r.invoice_wait_for),
+    invoiceDeclinedAt: iso(r.invoice_declined_at),
+    invoiceDeclinedNote: s(r.invoice_declined_note),
+    invoiceDeclinedBy: s(r.invoice_declined_by),
+    invoiceApprovedAt: iso(r.invoice_approved_at),
+    invoiceApprovedBy: s(r.invoice_approved_by),
+    agentSharePence: n(r.agent_share_pence),
     paidAt: iso(r.paid_at),
     paidHow: r.paid_how ? (s(r.paid_how) as PaidHow) : null,
     cancelledReason: s(r.cancelled_reason),
@@ -396,7 +424,9 @@ const COLS = `id, ref, kind, status, property_id, property_name, locality, landl
   due_at, cert_dates, reported_by, reported_at, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence, quote_pence,
   approved_by, approved_at, completed_at, completion_note, invoice_pence, invoice_ref, invoiced_at, paid_at, paid_how,
   cancelled_reason, files, rehearsal, tenants, landlord_skipped, quiet_tenants, tenants_told_booked_at, tenants_access_notice, tenants_access_told_at, skipped_steps, quote_requested_at,
-  landlord_invoice_token, landlord_invoice_asked_at, landlord_invoice_answer, landlord_invoice_answered_at, landlord_invoice_note, landlord_invoice_by, payrun_at, payrun_by, order_sent_to, order_sent_to_name, created_at, updated_at`;
+  landlord_invoice_token, landlord_invoice_asked_at, landlord_invoice_answer, landlord_invoice_answered_at, landlord_invoice_note, landlord_invoice_by, payrun_at, payrun_by, order_sent_to, order_sent_to_name,
+  invoice_wait_pence, invoice_wait_ref, invoice_wait_at, invoice_wait_for, invoice_declined_at, invoice_declined_note, invoice_declined_by, invoice_approved_at, invoice_approved_by, agent_share_pence,
+  created_at, updated_at`;
 
 /* ── contractors ────────────────────────────────────────────────────────── */
 
@@ -760,6 +790,12 @@ export type Move =
   /** alreadyDone: work finished before it was on the OS - nobody is emailed and the tenant is not asked (Rhiannon, 19 Oct 2026). */
   | { action: "done"; note: string; completedAt?: string | null; alreadyDone?: boolean }
   | { action: "invoice"; invoicePence: number; invoiceRef?: string; note?: string }
+  /** A contractor's own upload: it waits for the agent and tells nobody in accounts (Sean McMahon, 23 Nov 2026). */
+  | { action: "invoice_wait"; invoicePence: number; invoiceRef?: string; waitFor?: string }
+  /** The agent passes the waiting invoice. totalPence is what the landlord is charged: the contractor's figure or more, never less. */
+  | { action: "invoice_approve"; totalPence?: number | null; note?: string }
+  /** The agent sends it back, with why. The contractor can upload another from the same link. */
+  | { action: "invoice_decline"; note: string }
   | { action: "paid"; paidHow: PaidHow; note?: string }
   | { action: "cancel"; reason: string; contractorEdit?: ContractorWords | null }
   | { action: "reopen"; note?: string }
@@ -1116,8 +1152,72 @@ export async function moveOrder(id: string, move: Move, by: string, out: MoveOut
       set("invoice_pence", Math.round(move.invoicePence));
       set("invoice_ref", (move.invoiceRef ?? "").trim());
       set("invoiced_at", new Date());
+      /* Logged by one of our own people, so it has been looked at: a
+         contractor's upload still waiting is answered by this, and a share
+         worked out on the old figure no longer stands. */
+      if (o.invoiceWaitAt) { set("invoice_wait_pence", null); set("invoice_wait_ref", ""); set("invoice_wait_at", null); set("invoice_wait_for", ""); }
+      if (o.agentSharePence != null) set("agent_share_pence", null);
       if (["done", "invoiced"].includes(o.status)) set("status", "invoiced");
       text = `Invoice ${pounds(move.invoicePence)}${move.invoiceRef ? ` (${move.invoiceRef.trim()})` : ""}${o.contractorName ? ` from ${o.contractorName}` : ""}.${move.note ? ` ${move.note}` : ""}`;
+      break;
+    }
+    /* The contractor's own upload (Sean McMahon, 23 Nov 2026: "all invoices
+       should be sent to the agent ONLY. The agent should check the works and
+       invoice and then, and only then should it be added to the system for
+       payment"). The figure waits; the job's status does not move, so it is
+       on no accounts list and no payment run until the agent passes it. */
+    case "invoice_wait": {
+      if (!Number.isFinite(move.invoicePence) || move.invoicePence <= 0) throw new Error("An invoice needs a figure.");
+      if (o.payee === "landlord") throw new Error("The landlord paid the contractor directly, so there's no invoice for accounts.");
+      if (o.invoicePence != null) throw new Error("There's already an invoice on this job.");
+      set("invoice_wait_pence", Math.round(move.invoicePence));
+      set("invoice_wait_ref", (move.invoiceRef ?? "").trim().slice(0, 80));
+      set("invoice_wait_at", new Date());
+      set("invoice_wait_for", (move.waitFor ?? "").trim().toLowerCase());
+      set("invoice_declined_at", null);
+      set("invoice_declined_note", "");
+      set("invoice_declined_by", "");
+      eventKind = "note";
+      text = `${o.contractorName || "The contractor"} uploaded their invoice: ${pounds(move.invoicePence)}${move.invoiceRef?.trim() ? ` (${move.invoiceRef.trim()})` : ""}. It waits for the agent to check it. Accounts have not been told.`;
+      break;
+    }
+    case "invoice_approve": {
+      if (o.invoiceWaitPence == null) throw new Error("There's no invoice waiting on this job.");
+      if (o.payee === "landlord") throw new Error("The landlord paid the contractor directly, so there's no invoice for accounts.");
+      const theirs = o.invoiceWaitPence;
+      const total = move.totalPence == null ? theirs : Math.round(move.totalPence);
+      if (!Number.isFinite(total) || total < theirs) throw new Error(`The total can't be less than the contractor's ${pounds(theirs)}.`);
+      const share = total - theirs;
+      set("invoice_pence", theirs);
+      set("invoice_ref", o.invoiceWaitRef);
+      set("invoiced_at", new Date());
+      set("agent_share_pence", share > 0 ? share : null);
+      set("invoice_approved_at", new Date());
+      set("invoice_approved_by", by);
+      set("invoice_wait_pence", null);
+      set("invoice_wait_ref", "");
+      set("invoice_wait_at", null);
+      set("invoice_wait_for", "");
+      /* They sent the invoice, so they are who is paid, unless somebody already said otherwise. */
+      if (!o.payee) set("payee", "contractor");
+      if (["done", "invoiced"].includes(o.status)) set("status", "invoiced");
+      eventKind = "invoice";
+      text = `Invoice ${pounds(theirs)}${o.invoiceWaitRef ? ` (${o.invoiceWaitRef})` : ""}${o.contractorName ? ` from ${o.contractorName}` : ""} checked and passed.${share > 0 ? ` Landlord charged ${pounds(total)}: ${pounds(share)} is the agent's.` : ""}${move.note?.trim() ? ` ${move.note.trim()}` : ""}`;
+      break;
+    }
+    case "invoice_decline": {
+      if (o.invoiceWaitPence == null) throw new Error("There's no invoice waiting on this job.");
+      const why = (move.note ?? "").trim().slice(0, 2000);
+      if (!why) throw new Error("Say why it's going back.");
+      set("invoice_declined_at", new Date());
+      set("invoice_declined_note", why);
+      set("invoice_declined_by", by);
+      set("invoice_wait_pence", null);
+      set("invoice_wait_ref", "");
+      set("invoice_wait_at", null);
+      set("invoice_wait_for", "");
+      eventKind = "note";
+      text = `Invoice ${pounds(o.invoiceWaitPence)} from ${o.contractorName || "the contractor"} not accepted: ${why} Accounts were never told.`;
       break;
     }
     case "ask_landlord_invoice": {

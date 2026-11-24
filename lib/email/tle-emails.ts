@@ -30,7 +30,7 @@ import { verifyEmailFor, resetEmailFor } from "@/lib/verify-email";
 import { pilotInviteEmail } from "@/lib/email/pilot-email";
 import { videoChaseEmail } from "@/lib/email/video-chase-email";
 import { certificateChaseEmail, ownComplianceEmail, ownComplianceRollupEmail, pretenancyDigestEmail, dealMovedEmail, radarDigestEmail, plcFinalApprovalEmail } from "@/lib/email/agent-emails";
-import { accountsInvoiceEmail, certificateSharedEmail, complianceJobEmail, landlordInvoiceAnswerEmail } from "@/lib/email/works-internal";
+import { accountsInvoiceEmail, certificateSharedEmail, complianceJobEmail, invoiceWaitingEmail, landlordInvoiceAnswerEmail } from "@/lib/email/works-internal";
 import type { WorksOrder } from "@/lib/works-orders";
 import {
   bodyFor,
@@ -1647,6 +1647,21 @@ TLE_EMAILS.push(
     render: () => {
       /* With the bank details to pay to (26 Oct 2026); an invented account. */
       const m = accountsInvoiceEmail(JOB_SAMPLE, { accountName: "R. Holt Heating Ltd", sortCode: "401020", accountNumber: "12345678" });
+      return { subject: m.subject, html: m.html };
+    },
+  },
+  {
+    id: "works-invoice-waiting",
+    group: "Maintenance",
+    name: "Invoice to Check - the Agent",
+    audience: "internal",
+    trigger: "When a contractor uploads their own invoice from their job link",
+    fires: "lib/works-emails → tellInvoiceWaiting",
+    to: "The home's agent, or whoever of ours works the job; the office inbox when there is neither",
+    summary:
+      "The contractor's invoice is on the job and is waiting to be checked. It has not gone to accounts and nothing is paid until the agent sends it on or sends it back.",
+    render: () => {
+      const m = invoiceWaitingEmail({ ...JOB_SAMPLE, invoiceWaitPence: 14000, invoiceWaitRef: "INV-2291" } as WorksOrder, { office: false });
       return { subject: m.subject, html: m.html };
     },
   },

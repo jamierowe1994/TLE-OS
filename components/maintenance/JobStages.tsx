@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import InvoiceWaiting from "@/components/maintenance/InvoiceWaiting";
 import type { Move, WorksOrder } from "@/lib/works-orders";
 import { STEPS, stepOf, wasSkipped, type StepId } from "@/lib/works-steps";
 import {
@@ -186,8 +187,10 @@ export function StagePanel({ o, stage, move, busy, err, canCorporate, canPayrun,
   const here = currentStage(o);
   const mv = async (m: Move) => { await move(m); };
   const meta = STEPS.find((s) => s.id === stage);
+  /* A contractor's own invoice waits for the agent on whatever step the job is on (Sean McMahon, 23 Nov 2026). */
+  const waiting = o.status !== "cancelled" && (o.invoiceWaitPence != null || (o.invoiceDeclinedAt && o.invoicePence == null)) ? <InvoiceWaiting o={o} move={mv} busy={busy} /> : null;
   if (stage === here && o.status !== "cancelled") {
-    return <WorksNow o={o} move={mv} busy={busy} err={err} canCorporate={canCorporate} canPayrun={canPayrun} onInvoiceLandlord={onInvoiceLandlord} onCertificate={onCertificate} variant={bare ? "bare" : "card"} landlordPaidOn={landlordPaidOn} onAddFile={onAddFile} onReopen={() => onForm("reopen")} />;
+    return <>{waiting}<WorksNow o={o} move={mv} busy={busy} err={err} canCorporate={canCorporate} canPayrun={canPayrun} onInvoiceLandlord={onInvoiceLandlord} onCertificate={onCertificate} variant={bare ? "bare" : "card"} landlordPaidOn={landlordPaidOn} onAddFile={onAddFile} onReopen={() => onForm("reopen")} /></>;
   }
   const btn = "wn-btn rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12px] transition-colors hover:border-ink/40";
   const primary = "wn-primary rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50";

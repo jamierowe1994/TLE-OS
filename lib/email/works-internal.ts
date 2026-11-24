@@ -81,6 +81,45 @@ export function accountsInvoiceEmail(o: WorksOrder, bank?: BankDetails | null, c
 }
 
 /**
+ * A contractor has uploaded their own invoice and it is waiting for the
+ * home's agent (Sean McMahon, 23 Nov 2026). It used to go straight to
+ * accounts; now the agent sees it first, and this is how they hear. With no
+ * agent on the home it comes to the office inbox instead, saying so.
+ */
+export function invoiceWaitingEmail(o: WorksOrder, to: { office: boolean }): AgentEmail {
+  const who = o.contractorName || "The contractor";
+  const attached = (o.files ?? []).some((f) => f.kind === "invoice");
+  const subject = `Invoice to check: #${o.ref} ${o.title}, ${pounds(o.invoiceWaitPence)} from ${o.contractorName || "the contractor"}`;
+  const intro = to.office
+    ? `${who} has uploaded their invoice. There is no agent on this home in the OS, so it has come to the office to check. It has not been put through for payment.${attached ? " The invoice is attached." : ""}`
+    : `${who} has uploaded their invoice. It has not gone to accounts, and it won't until you have checked it.${attached ? " The invoice is attached." : ""}`;
+  return {
+    subject,
+    html: skyListShell({
+      heading: to.office ? `An invoice needs checking on job #${o.ref}` : `An invoice is waiting for you on job #${o.ref}`,
+      intro,
+      rows: [
+        { title: where(o), detail: o.title, tone: "neutral", icon: "mark-home.png" },
+        {
+          title: `${pounds(o.invoiceWaitPence)} from ${o.contractorName || "the contractor"}`,
+          detail: `Invoice ${o.invoiceWaitRef || "no number"} · reference #${o.ref}`,
+          tone: "attention",
+          icon: "mark-money.png",
+        },
+      ],
+      rowsLead: "To check",
+      rowStyle: "bare",
+      button: "Open the job",
+      link: jobLink(o.id),
+      hero: "hero-invoice.png",
+      tip: "Check it against the work, then press Send to Accounts on the job. If it isn't right, press Send It Back and say why: nothing is paid either way until you decide.",
+      tipQuiet: true,
+    }),
+    text: `Invoice to check on job #${o.ref}: ${o.title} at ${where(o)}. ${pounds(o.invoiceWaitPence)} from ${o.contractorName || "the contractor"}. It has not gone to accounts. Open: ${jobLink(o.id)}`,
+  };
+}
+
+/**
  * The landlord has answered on a contractor's invoice (Kirstie Mulholland,
  * 20 Oct 2026): accounts, so they know whether to take it from the rent, and
  * the home's agent, copied in. Internal, like its twin above.

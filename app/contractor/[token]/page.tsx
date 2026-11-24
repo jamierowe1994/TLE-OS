@@ -24,6 +24,10 @@ import { ACCEPT_EVIDENCE } from "@/lib/upload-rules";
 type Job = {
   ref: number; kind?: string; title: string; category: string; description: string; status: string; step: string; address: string; access: string; tenant: string;
   contractorName: string; scheduledAt: string | null; completedAt: string | null; invoicePence: number | null; invoiceRef: string; files: { name: string; at: string }[];
+  /** Their invoice is in and is being checked before it goes to accounts (23 Nov 2026). */
+  invoiceChecking?: boolean;
+  /** Their last invoice was not accepted: they can send another from here. */
+  invoiceSentBack?: boolean;
   /** Asked for a price only (Sean, 20 Oct 2026): "asked" for their quote, or it is "with_landlord".
    *  On a firm's own quote link (21 Oct 2026) also: "quoted" (theirs is in, others may be quoting),
    *  "accepted", "declined" (they said they can't), "closed" (another quote was taken). */
@@ -98,7 +102,7 @@ export default function ContractorPage() {
       if (r.certificate && !r.certificate.filed) return setFlash("Thanks - we already have this certificate on the property's record, so nothing was filed twice.");
       return setFlash("Thanks - the certificate is on the property's record. Once our compliance team has checked it, the landlord and tenant are sent a copy.");
     }
-    setFlash(kind === "invoice" ? "Thanks - your invoice is on the job and accounts have been told." : "Photo added.");
+    setFlash(kind === "invoice" ? "Thanks - your invoice is on the job. It is checked against the work before it goes to accounts." : "Photo added.");
   }
 
   /* Their price, with the quote document if they have one. */
@@ -277,7 +281,8 @@ export default function ContractorPage() {
               {job.invoicePence == null ? (
                 <div style={box}>
                   <span style={label}>Your invoice</span>
-                  <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b6b70" }}>Quote job #{job.ref} on it. It goes straight to accounts.</p>
+                  {job.invoiceSentBack && <p style={{ margin: "0 0 10px", fontSize: 13, color: "#a85a51" }}>Your last invoice wasn&apos;t accepted. If you haven&apos;t heard why yet, you will. You can send a corrected one here.</p>}
+                  <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b6b70" }}>Quote job #{job.ref} on it. It is checked against the work, then goes to accounts.</p>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="£ total" style={field} />
                     <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Invoice number" style={field} />
@@ -292,7 +297,7 @@ export default function ContractorPage() {
               ) : (
                 <div style={box}>
                   <span style={label}>Your invoice</span>
-                  <p style={{ margin: 0, fontSize: 14 }}>Received: £{(job.invoicePence / 100).toFixed(2)}{job.invoiceRef ? ` (${job.invoiceRef})` : ""}. Accounts have it.</p>
+                  <p style={{ margin: 0, fontSize: 14 }}>Received: £{(job.invoicePence / 100).toFixed(2)}{job.invoiceRef ? ` (${job.invoiceRef})` : ""}. {job.invoiceChecking ? "It is being checked before it goes to accounts." : "Accounts have it."}</p>
                 </div>
               )}
               </>

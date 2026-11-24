@@ -809,6 +809,22 @@ ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_invoice_by        
 -- on the job, not a status: the job stays invoiced until it is marked paid.
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS payrun_at                    TIMESTAMPTZ;
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS payrun_by                    TEXT NOT NULL DEFAULT '';
+-- A contractor's own invoice waits for the home's agent (Sean McMahon, 23 Nov
+-- 2026: contractors were uploading invoices "direct to TLE and by-passing the
+-- agent"). The figure they typed sits here, off invoice_pence, so nothing
+-- that counts or pays invoices sees it until the agent has passed it.
+-- agent_share_pence is what the agent adds on top for arranging the work:
+-- the landlord is charged invoice_pence + agent_share_pence.
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS invoice_wait_pence           BIGINT;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS invoice_wait_ref             TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS invoice_wait_at              TIMESTAMPTZ;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS invoice_wait_for             TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS invoice_declined_at          TIMESTAMPTZ;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS invoice_declined_note        TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS invoice_declined_by          TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS invoice_approved_at          TIMESTAMPTZ;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS invoice_approved_by          TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS agent_share_pence            BIGINT;
 CREATE UNIQUE INDEX IF NOT EXISTS os_works_orders_ll_invoice_token ON os_works_orders (landlord_invoice_token) WHERE landlord_invoice_token IS NOT NULL;
 -- A quote asked of several contractors at once (Sean McMahon, 21 Oct 2026:
 -- Forth said too far, and the job could not be sent on to All Trade). One row

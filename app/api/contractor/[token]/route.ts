@@ -2,12 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { hasDb } from "@/lib/db";
-import { orderByToken, moveOrder, logEvent, markAccountsTold, stepOf, pounds, tenantsOf, getOrder, type MoveOut, type QuoteAsk, type WorksOrder } from "@/lib/works-orders";
+import { orderByToken, moveOrder, logEvent, stepOf, pounds, tenantsOf, getOrder, type MoveOut, type QuoteAsk, type WorksOrder } from "@/lib/works-orders";
 import { askByToken } from "@/lib/works-quotes";
-import { emailsForMove, jobTenants, outcomeLine, tellAccounts } from "@/lib/works-emails";
+import { emailsForMove, invoiceChecker, jobTenants, outcomeLine, tellInvoiceWaiting } from "@/lib/works-emails";
 import { pingCompliance } from "@/lib/works-compliance";
 import { agentFor } from "@/lib/works-agent";
-import { invoiceSettings } from "@/lib/invoices";
 import { withR2, R2_BUCKET, safeName, r2Configured } from "@/lib/r2";
 import { fileType } from "@/lib/upload-rules";
 import { fileJobCertificate, CertificateRefused } from "@/lib/works-certificate";
@@ -17,8 +16,12 @@ import { fileJobCertificate, CertificateRefused } from "@/lib/works-certificate"
  * order. No sign-in. They can set the date they've agreed with the tenant,
  * mark the job done, and drop in photos, a certificate and their invoice.
  *
- * An INVOICE lands on the job and tells accounts (Michael, 7 Sep 2026: "they
- * don't actually tell me they've uploaded an invoice").
+ * An INVOICE lands on the job and WAITS FOR THE HOME'S AGENT (Sean McMahon,
+ * 23 Nov 2026: invoices were going "direct to TLE and by-passing the agent",
+ * and two were put through for payment unseen). Until 24 Nov 2026 it went
+ * straight to accounts (Michael, 7 Sep 2026: "they don't actually tell me
+ * they've uploaded an invoice"). Now the agent is told instead, and accounts
+ * hear only once the agent has passed it (lib/works-orders invoice_approve).
  *
  * A CERTIFICATE goes further, and is the reason this route changed on 14 Sep
  * 2026. It is filed as a certificate proper - the vault, os_certificates, and
@@ -62,7 +65,11 @@ async function publicView(o: WorksOrder) {
     quoteStage: pricing ? (o.quotePence == null ? "asked" : "with_landlord") : null, quotePence: o.quotePence,
     /* Every tenant to arrange access with (a shared house has several). */
     tenant: live ? (await livingThere(o)).map((t) => [`${t.name}${t.room ? ` (${t.room})` : ""}`, t.phone].filter(Boolean).join(" · ")).join("; ") : "",
-    scheduledAt: o.scheduledAt, completedAt: o.completedAt, invoicePence: o.invoicePence, invoiceRef: o.invoiceRef,
+    scheduledAt: o.scheduledAt, completedAt: o.completedAt,
+    /* Theirs to see either way: on the job, or still being checked. Never the agent's own figure. */
+    invoicePence: o.invoicePence ?? o.invoiceWaitPence, invoiceRef: o.invoicePence != null ? o.invoiceRef : o.invoiceWaitRef,
+    invoiceChecking: o.invoicePence == null && o.invoiceWaitPence != null,
+    invoiceSentBack: o.invoicePence == null && o.invoiceWaitPence == null && !!o.invoiceDeclinedAt,
     files: o.files.map((f) => ({ name: f.name, at: f.at })),
   };
 }
@@ -176,6 +183,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
       if (file.size > 50 * 1024 * 1024) return NextResponse.json({ ok: false, error: "Files up to 50 MB, please." }, { status: 400 });
       if (!r2Configured) return NextResponse.json({ ok: false, error: "Storage isn't connected on this environment." }, { status: 503 });
       const kind = String(form.get("kind") ?? "photo");
+      /* One invoice at a time: said before the file is stored, so a second press files nothing twice. */
+      if (kind === "invoice" && (o.invoicePence != null || o.invoiceWaitPence != null)) {
+        return NextResponse.json({ ok: false, error: o.invoicePence != null ? "We already have your invoice for this job." : "We already have your invoice. It is being checked." }, { status: 400 });
+      }
       if (kind === "quote") {
         const amount = Number(String(form.get("amount") ?? "").replace(/[£,\s]/g, ""));
         if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ ok: false, error: "Put the total in first." }, { status: 400 });
@@ -220,18 +231,24 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
       const amount = Number(String(form.get("amount") ?? "").replace(/[£,\s]/g, ""));
       if (kind === "invoice" && Number.isFinite(amount) && amount > 0) {
         if (!next.completedAt) next = await moveOrder(o.id, { action: "done", note: String(form.get("note") ?? "").trim() || "Marked done by the contractor with their invoice." }, by);
-        next = await moveOrder(o.id, { action: "invoice", invoicePence: Math.round(amount * 100), invoiceRef: String(form.get("ref") ?? "").trim() }, by);
-        const settings = await invoiceSettings();
-        const told = await tellAccounts(next, settings.accountsEmail ?? "");
-        if (told.sent) await markAccountsTold(o.id);
+        /* It waits for the home's agent; accounts are not told (Sean McMahon, 23 Nov 2026). */
+        const checker = await invoiceChecker(next);
+        next = await moveOrder(o.id, { action: "invoice_wait", invoicePence: Math.round(amount * 100), invoiceRef: String(form.get("ref") ?? "").trim(), waitFor: checker?.email ?? "" }, by);
+        const told = await tellInvoiceWaiting(next, checker);
         await logEvent(
           o.id,
           "TLE OS",
           "email",
-          told.via === "the rehearsal" ? outcomeLine(told) : told.sent ? `Accounts told: ${pounds(next.invoicePence)} to pay, at ${told.address}.` : `Accounts not told: ${told.reason}.`
+          told.via === "the rehearsal" ? outcomeLine(told) : told.sent ? `${told.name || "The office"} asked to check the invoice (${pounds(next.invoiceWaitPence)}), at ${told.address}.` : `Nobody was emailed to check the invoice: ${(told.reason ?? "").replace(/\.+$/, "")}. It still waits on the job.`
         );
-        if (me) for (const e of await emailsForMove(next, "done", me).catch(() => [])) await logEvent(o.id, "TLE OS", "email", outcomeLine(e));
-        await pingCompliance(next, "done");
+        /* A corrected invoice after one was sent back: the job was finished
+           and everybody told the first time, so nobody hears "done" twice. */
+        if (o.invoiceDeclinedAt) {
+          await pingCompliance(next, "file");
+        } else {
+          if (me) for (const e of await emailsForMove(next, "done", me).catch(() => [])) await logEvent(o.id, "TLE OS", "email", outcomeLine(e));
+          await pingCompliance(next, "done");
+        }
       } else {
         /* A photo on a job that is already finished still goes over; on one
            that is not, it rides along in the completion email. */

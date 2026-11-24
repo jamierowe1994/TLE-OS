@@ -3,7 +3,7 @@ import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { getOrder, moveOrder, logEvent, markAccountsTold, type Move, type MoveOut } from "@/lib/works-orders";
-import { emailsForMove, outcomeLine, tellAccounts, tellInvoiceAnswer } from "@/lib/works-emails";
+import { emailsForMove, invoiceChecker, outcomeLine, tellAccounts, tellInvoiceAnswer } from "@/lib/works-emails";
 import { pingCompliance } from "@/lib/works-compliance";
 import { invoiceSettings } from "@/lib/invoices";
 import { pounds } from "@/lib/works-orders";
@@ -16,6 +16,20 @@ import { lookFor } from "@/lib/new-look-store";
    it is on the run. Agents see it and cannot press it. Decided on the actor. */
 const PAYRUN_ACTIONS = new Set<Move["action"]>(["payrun", "payrun_undo"]);
 const canPayrun = (role: string | null | undefined) => can(role, "see:everything");
+
+/* A contractor's own invoice is the agent's to pass or send back (Sean
+   McMahon, 23 Nov 2026): whoever was asked to check it, the home's agent,
+   whoever raised the job, or the office. Nobody else's press counts. */
+const INVOICE_CHECK = new Set<Move["action"]>(["invoice_approve", "invoice_decline"]);
+async function mayCheckInvoice(me: { email: string; name: string; role?: string | null }, id: string): Promise<boolean> {
+  if (can(me.role, "see:everything")) return true;
+  const o = (await getOrder(id))?.order;
+  if (!o) return true; /* moveOrder says "No such job" */
+  const mine = new Set([me.email, me.name].map((x) => (x ?? "").trim().toLowerCase()).filter(Boolean));
+  if (mine.has(o.invoiceWaitFor.trim().toLowerCase()) || mine.has((o.raisedBy ?? "").trim().toLowerCase())) return true;
+  const checker = await invoiceChecker(o).catch(() => null);
+  return !!checker && mine.has(checker.email.trim().toLowerCase());
+}
 
 /**
  * One job: read it with its timeline, or move it along.
@@ -46,6 +60,9 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   if (!move || typeof move.action !== "string") return NextResponse.json({ ok: false, error: "Say what to do." }, { status: 400 });
   if (PAYRUN_ACTIONS.has(move.action) && !canPayrun(actor.role)) {
     return NextResponse.json({ ok: false, error: "Only the office can put an invoice on the payment run." }, { status: 403 });
+  }
+  if (INVOICE_CHECK.has(move.action) && !(await mayCheckInvoice(subject ?? actor, id))) {
+    return NextResponse.json({ ok: false, error: "This invoice is for the home's agent to check." }, { status: 403 });
   }
   /* The Landlord Paid Directly (Dan, ticket b7a79378, 20 Nov 2026): behind
      its own switch (lib/new-look "landlordpaid"), decided on whoever is
@@ -80,7 +97,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     if ((tenantEdit?.body?.trim() || tenantEdit?.subject?.trim()) && emails.some((e) => e.to === "tenant" && e.sent)) await logEvent(order.id, by, "note", "The email to the tenants was reworded before it went.");
     if ((contractorEdit?.body?.trim() || contractorEdit?.subject?.trim()) && emails.some((e) => e.to === "contractor" && e.sent)) await logEvent(order.id, by, "note", "The email to the contractor was reworded before it went.");
     for (const e of emails) await logEvent(order.id, "TLE OS", "email", outcomeLine(e));
-    if (move.action === "invoice") {
+    /* Logged by one of ours, or a contractor's own invoice passed by the agent: either way accounts now hear. */
+    if (move.action === "invoice" || move.action === "invoice_approve") {
       const told = await tellAccounts(order, (await invoiceSettings()).accountsEmail ?? "");
       if (told.sent) await markAccountsTold(order.id);
       await logEvent(order.id, "TLE OS", "email", told.sent ? `Accounts told: ${pounds(order.invoicePence)} to pay, at ${told.address}.` : `Accounts not told: ${told.reason}.`);
