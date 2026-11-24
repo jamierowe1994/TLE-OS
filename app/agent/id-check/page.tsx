@@ -8,6 +8,8 @@ import type { Appt } from "@/lib/diary";
 import type { PhonePerson } from "@/app/api/m/people/route";
 import { ErrorLine, PhoneTop, SearchBox, Spinner } from "../bits";
 import { searchMatches } from "@/lib/search-match";
+import SignaturePad from "@/components/app/SignaturePad";
+import { ID_DECLARATION, ukLongDate } from "@/lib/id-declaration";
 
 /**
  * RIGHT TO RENT ID: who, which document, the photos, sent.
@@ -86,6 +88,28 @@ export default function PhoneIdCheck() {
   const [sentError, setSentError] = useState<string | null>(null);
   const library = useRef<HTMLInputElement | null>(null);
   const libraryFor = useRef<number>(0);
+  /* The signed declaration (Sean McMahon, ticket 88c98681), behind the
+     "idstamp" switch: null while it loads, on:false for everyone it doesn't cover. */
+  const [signing, setSigning] = useState<{ on: boolean; name: string; signature: string | null; error?: string } | null>(null);
+  const [drawing, setDrawing] = useState(false);
+  useEffect(() => {
+    fetch("/api/m/id-signature", { cache: "no-store" })
+      .then(async (r) => {
+        const j = (await r.json()) as { ok?: boolean; on?: boolean; name?: string; signature?: string | null; error?: string };
+        if (!r.ok || !j.ok) throw new Error(j.error ?? "Could not read your signature.");
+        setSigning({ on: Boolean(j.on), name: j.name ?? "", signature: j.signature ?? null });
+      })
+      /* Unreadable: the server still decides on send, and says so if it needs one. */
+      .catch((e: Error) => setSigning({ on: false, name: "", signature: null, error: e.message }));
+  }, []);
+  const saveSignature = async (png: string) => {
+    const r = await fetch("/api/m/id-signature", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ png }) });
+    const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!r.ok || !j.ok) throw new Error(j.error ?? "Your signature did not save. Try again.");
+    setSigning((s) => (s ? { ...s, signature: png } : s));
+    setDrawing(false);
+  };
+  const signed = !signing?.on || Boolean(signing.signature);
 
   /* Arriving from a viewing in the diary brings the name and address with it,
      and goes straight to the document: who it is has already been chosen. */
@@ -205,7 +229,7 @@ export default function PhoneIdCheck() {
     setPreviews((p) => p.filter((_, n) => n !== i));
   };
 
-  const ready = doc !== null && shots.length > 0 && shots.every(Boolean) && seen && likeness && (lasts === "none" || (lasts === "until" && Boolean(until))) && !sending;
+  const ready = doc !== null && shots.length > 0 && shots.every(Boolean) && seen && likeness && (lasts === "none" || (lasts === "until" && Boolean(until))) && signed && !sending;
 
   const send = async () => {
     if (!doc || !ready) return;
@@ -515,6 +539,34 @@ export default function PhoneIdCheck() {
             <span className="mt-2 block text-[12.5px] leading-snug text-muted">British or Irish passport: no time limit. A visa, permit or card with an end date: until that date.</span>
           </div>
 
+          {/* The signed declaration (Sean McMahon, ticket 88c98681): Sean's
+              words, the agent's signature, name and today's date, printed
+              under every page of the file that is sent. */}
+          {signing?.on && (
+            <div className="mt-2.5 rounded-2xl border border-[color:var(--m-line)] bg-card p-4" data-id-declaration>
+              <span className="block text-[14.5px] font-semibold">Your Declaration</span>
+              <p className="mt-1.5 text-[14px] leading-snug">{ID_DECLARATION}</p>
+              {signing.signature ? (
+                <div className="mt-3 flex items-end justify-between gap-3 border-t border-[color:var(--m-line)] pt-3">
+                  <div className="min-w-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={signing.signature} alt="Your signature" className="h-12 max-w-[180px] object-contain object-left" />
+                    <span className="mt-1 block truncate text-[13.5px] font-semibold">{signing.name || "You"}</span>
+                    <span className="block text-[13px] text-muted">{ukLongDate(new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" }))}</span>
+                  </div>
+                  <button type="button" onClick={() => setDrawing(true)} className="shrink-0 pb-0.5 text-[13px] font-semibold text-muted underline underline-offset-2">
+                    Redraw Signature
+                  </button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setDrawing(true)} className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[color:var(--brown)] text-[14.5px] font-semibold">
+                  <AppIcon name="pencil" size={17} /> Draw Your Signature
+                </button>
+              )}
+              <span className="mt-2 block text-[12.5px] leading-snug text-muted">Signed under every page of the ID when you send it.</span>
+            </div>
+          )}
+
           {error && <div className="mt-4"><ErrorLine text={error} /></div>}
 
           <button type="button" disabled={!ready} onClick={send} className={`${primary} mt-5`} style={{ background: "var(--brown)" }}>
@@ -552,7 +604,7 @@ export default function PhoneIdCheck() {
           </span>
           <h2 className="hand mt-4 text-[24px]">Sent to the Office</h2>
           <p className="mt-2 text-[15px] text-muted">
-            {name.trim()}&rsquo;s {d?.title.toLowerCase() ?? "ID"} is filed with today&rsquo;s date and your name.
+            {name.trim()}&rsquo;s {d?.title.toLowerCase() ?? "ID"} is filed with today&rsquo;s date and your name{signing?.on && signing.signature ? ", signed with your declaration on every page" : ""}.
           </p>
           {linkedAt && (
             <p className="mt-2 text-[14px] text-muted">Kept on the lead for your {linkedAt.at} viewing{linkedAt.home ? ` at ${linkedAt.home}` : ""}.</p>
@@ -567,6 +619,8 @@ export default function PhoneIdCheck() {
           </div>
         </div>
       )}
+
+      {drawing && <SignaturePad onSave={saveSignature} onClose={() => setDrawing(false)} />}
 
       {camera !== null && d && (
         <DocCamera

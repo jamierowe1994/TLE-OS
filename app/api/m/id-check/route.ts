@@ -10,6 +10,8 @@ import { fileType, judgeFile, storedName } from "@/lib/upload-rules";
 import { bindPages, canBind } from "@/lib/doc-pages";
 import { followUpFor } from "@/lib/id-checks";
 import { leadIdsByContact } from "@/lib/rex-viewings";
+import { lookFor } from "@/lib/new-look-store";
+import { canStamp, signatureFor, stampIdPages } from "@/lib/id-stamp";
 
 /**
  * RIGHT TO RENT ID, photographed on a viewing (16 Sep 2026).
@@ -165,13 +167,29 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  /* The agent's declaration, signed on every page (Sean McMahon, ticket
+     88c98681; lib/id-stamp). Only behind the "idstamp" switch, and only with
+     the in-person tick, which is required above. Off, exactly as before. */
+  const signing = Boolean((await lookFor(actor).catch(() => null))?.idstamp);
+  let signature: string | null = null;
+  if (signing) {
+    const sig = await signatureFor(actor.id).catch(() => undefined);
+    if (sig === undefined) return NextResponse.json({ ok: false, error: "Could not read your signature, so nothing was sent. Try again." }, { status: 500 });
+    if (!sig) return NextResponse.json({ ok: false, error: "Draw your signature first. It goes under the declaration on every page." }, { status: 400 });
+    if (!canStamp(files)) return NextResponse.json({ ok: false, error: "These photos can't be signed. Take them again with the camera." }, { status: 422 });
+    signature = sig.png;
+  }
+
   const id = randomUUID();
   const stamp = londonToday();
   const base = safeName(`right-to-rent ${name} ${stamp}`).replace(/\s+/g, "-").toLowerCase();
   let file: File;
   try {
-    file = canBind(files) ? await bindPages(files, `${base}.pdf`) : files[0];
-  } catch {
+    file = signature
+      ? await stampIdPages(files, `${base}.pdf`, { agent: actor.name ?? "", signaturePng: signature, day: stamp })
+      : canBind(files) ? await bindPages(files, `${base}.pdf`) : files[0];
+  } catch (e) {
+    if (signature) console.error("Right to Rent signing failed", publicError(e));
     return NextResponse.json({ ok: false, error: "The photos could not be put together. Try taking them again." }, { status: 422 });
   }
   /* A single photo keeps its own extension; a bound set is a PDF. */
@@ -235,10 +253,10 @@ export async function POST(req: NextRequest) {
   try {
     await q(
       `INSERT INTO os_id_checks (id, person_name, property, appt_id, doc_type, pages, file_key, file_type, seen_in_person, checked_by, checked_by_name, lead_id, likeness,
-                                 method, right_until, no_time_limit, follow_up_on)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10, $11, TRUE, 'document', $12, $13, $14)`,
+                                 method, right_until, no_time_limit, follow_up_on, declared)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10, $11, TRUE, 'document', $12, $13, $14, $15)`,
       [id, name, linkedHome, apptId, docType, files.length, key, file.type, actor.id, actor.name ?? "", linkedLead,
-        lasts === "until" ? rightUntil : null, lasts === "none", lasts === "until" ? followUpFor(rightUntil) : null]
+        lasts === "until" ? rightUntil : null, lasts === "none", lasts === "until" ? followUpFor(rightUntil) : null, Boolean(signature)]
     );
   } catch (e) {
     console.error("Right to Rent record failed", publicError(e));

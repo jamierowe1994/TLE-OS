@@ -2643,6 +2643,9 @@ ALTER TABLE os_id_checks ADD COLUMN IF NOT EXISTS share_code TEXT;
 ALTER TABLE os_id_checks ADD COLUMN IF NOT EXISTS right_until DATE;
 ALTER TABLE os_id_checks ADD COLUMN IF NOT EXISTS no_time_limit BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE os_id_checks ADD COLUMN IF NOT EXISTS follow_up_on DATE;
+-- The stored file carries the agent's signed declaration on every page
+-- (24 Nov 2026, lib/id-stamp, behind the "idstamp" switch).
+ALTER TABLE os_id_checks ADD COLUMN IF NOT EXISTS declared BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS os_id_checks_follow_up ON os_id_checks (follow_up_on) WHERE follow_up_on IS NOT NULL;
 
 -- A tenant's right to rent expiry, recorded on the let itself (15 Oct 2026,
