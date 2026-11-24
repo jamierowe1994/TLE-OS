@@ -375,8 +375,18 @@ export async function POST(req: NextRequest) {
     let token: string | null = null;
     let as: { asActor: boolean; name: string } = { asActor: true, name: actor.name };
 
+    /* ALREADY PUBLISHED IS NOT A DEAD END (Sean McMahon, 24 Nov 2026, ticket
+       f3666e34). His first press came back 502 although REX had published it,
+       so the screen still offered Push to the portals, and the second press
+       was refused with "already published, use Put back on the portals" - a
+       button that screen does not show. Push pressed on a listing REX already
+       calls published now does what Put back does (channels on, the portals
+       told again), after the same checks a first push makes. Live without
+       Portals still refuses: that one is not asking for the portals. */
+    const republish = action === "publish" && was.status === "published";
+    const putBack = action === "on" || republish;
     if (action === "publish" || action === "quiet") {
-      if (was.status === "published") {
+      if (was.status === "published" && action === "quiet") {
         return NextResponse.json({ ok: false, error: "It is already published. Use Put back on the portals if it has been taken off." }, { status: 409 });
       }
       /* Our own required fields first (lib/listing-requirements) - the same
@@ -435,6 +445,12 @@ export async function POST(req: NextRequest) {
       const raw = await rexCall("Listings", "read", { id });
       const period = String(((raw.result as { price_rent_period?: { id?: string } } | null)?.price_rent_period?.id) ?? "");
       const rent = Number((raw.result as { price_rent?: unknown } | null)?.price_rent ?? 0);
+      /* A published listing REX has withdrawn or let is off the market on
+         purpose: Push does not bring it back (Put back on the market does). */
+      const state = raw.ok ? String((raw.result as { system_listing_state?: unknown } | null)?.system_listing_state ?? "") : "";
+      if (republish && state !== "" && state !== "current") {
+        return NextResponse.json({ ok: false, error: "It has already been published and has since come off the market, so it has not gone back on. Use Put back on the market if it should be advertised again." }, { status: 409 });
+      }
       if (raw.ok && rent > 0 && period !== "month") {
         const fixed = await rexCall("Listings", "update", { data: { id, price_rent_period: { id: "month" } } }, token);
         if (!fixed.ok) {
@@ -472,10 +488,10 @@ export async function POST(req: NextRequest) {
       }
     }
     let res: RexResponse =
-      action === "publish" || action === "quiet"
+      !putBack
         ? await rexCall("ListingPublication", "publish", { listing_id: id }, token)
         : await rexCall("ListingPublication", "setActivePublicationChannels", { listing_id: id, channels: ALL_CHANNELS }, token);
-    if (res.ok && action === "on") {
+    if (res.ok && putBack) {
       const back = await queueUpload(id, "on", token);
       if (!back.ok) res = { status: back.res.status, ok: false, result: back.res.result, error: `The channels are back on but the portals were not sent it again: ${back.detail}` };
     }
@@ -504,7 +520,7 @@ export async function POST(req: NextRequest) {
       kind: "listing_publication",
       actorId: actor.id,
       actorEmail: actor.email,
-      detail: `${id}: ${action} (${was.status ?? "?"} [${was.channels.join(",")}] -> ${now.status ?? "?"} [${now.channels.join(",")}])${token ? (as.asActor ? "" : ` as ${as.name}`) : " as the office account"}${send ? `, portals: ${send.state}${send.refused.length ? ` (${send.refused.map((r) => `${r.portal}: ${r.why}`).join("; ").slice(0, 200)})` : ""}` : sending ? ", portals: not read" : ""}`,
+      detail: `${id}: ${action}${republish ? " (already published in REX, so put back on the portals)" : ""} (${was.status ?? "?"} [${was.channels.join(",")}] -> ${now.status ?? "?"} [${now.channels.join(",")}])${token ? (as.asActor ? "" : ` as ${as.name}`) : " as the office account"}${send ? `, portals: ${send.state}${send.refused.length ? ` (${send.refused.map((r) => `${r.portal}: ${r.why}`).join("; ").slice(0, 200)})` : ""}` : sending ? ", portals: not read" : ""}`,
     });
 
     return NextResponse.json({
