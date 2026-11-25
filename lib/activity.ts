@@ -2,6 +2,7 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { getApplications } from "@/lib/applications";
 import type { BoardRead } from "@/lib/applications-board";
+import { allCancellations } from "@/lib/let-cancel";
 
 /**
  * When somebody last did something on a listing or an application.
@@ -71,7 +72,7 @@ export async function activity(read: BoardRead = {}, seen?: (board: { at: number
   const app = new Map<string, number>();
   const listing = new Map<string, number>();
 
-  const [book, comments, plc, handovers, updates, viewings, archived, decided] = await Promise.all([
+  const [book, comments, plc, handovers, updates, viewings, archived, decided, cancelled] = await Promise.all([
     /* The held board of every application (lib/applications-board, the same
        one Applications shows, under the application rule in lib/staleness)
        rather than a walk of its own (9 Nov 2026): a cold walk made this the
@@ -107,7 +108,16 @@ export async function activity(read: BoardRead = {}, seen?: (board: { at: number
     rows<{ ref: string; listing_id: string | null; at: string }>(
       `SELECT ref, listing_id, decided_at AS at FROM os_offer_decisions WHERE decision = 'accepted' AND decided_at > NOW() - INTERVAL '60 days'`
     ),
+    /* Lets cancelled from their own page (lib/let-cancel): ref is the
+       application's id, a REX one bare and an OS offer's as os:<id>. */
+    allCancellations()
+      .then((all) => new Set(all.flatMap((c) => [c.ref, c.dealId ?? ""]).filter(Boolean)))
+      .catch(() => new Set<string>()),
   ]);
+  /* A cancelled let no longer holds its listing as let agreed (Sean McMahon,
+     ticket c3f19197, 25 Nov 2026): the home went on reading let agreed with
+     no Relist, so the other offers on it could not be gone back to. */
+  const isCancelled = (ref: string) => cancelled.has(ref) || cancelled.has(ref.replace(/^rex:/, ""));
 
   for (const a of book) bump(app, a.id, Math.max(ms(a.updatedAt), ms(a.createdAt)));
   for (const r of comments) bump(app, r.id, ms(r.at));
@@ -128,6 +138,7 @@ export async function activity(read: BoardRead = {}, seen?: (board: { at: number
           (a) =>
             a.status === "accepted" &&
             a.listingId != null &&
+            !isCancelled(String(a.id)) &&
             (a.startDate ? a.startDate.slice(0, 10) >= since : ms(a.createdAt) > now - 60 * 86400000)
         )
         .map((a) => String(a.listingId))
@@ -138,7 +149,7 @@ export async function activity(read: BoardRead = {}, seen?: (board: { at: number
     const a = byApp.get(d.ref);
     if (a && a.status === "unsuccessful") continue;
     const id = d.listing_id ?? (a?.listingId != null ? String(a.listingId) : null);
-    if (id && !accepted.includes(id)) accepted.push(id);
+    if (id && !accepted.includes(id) && !isCancelled(d.ref)) accepted.push(id);
     if (id) bump(listing, id, ms(d.at));
   }
 

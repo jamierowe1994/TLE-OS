@@ -3,6 +3,7 @@ import { hasDb, q } from "@/lib/db";
 import { sameHome } from "@/lib/address-parse";
 import { assembled, type Assembled } from "@/lib/applications-board";
 import { getAllPropolyDeals, getPropolyCompletes, type BusinessDeal, type CompletedDeal } from "@/lib/business/propoly-deals";
+import { allCancellations } from "@/lib/let-cancel";
 
 /**
  * TAKEN, WHATEVER REX SAYS (James, 12 Oct 2026).
@@ -88,13 +89,15 @@ export async function takenStates(listings: L[]): Promise<{ taken: Map<string, T
   const live = listings.filter((l) => l.publicationStatus === "published" && !l.letAgreed);
   if (!live.length) return { taken, fellThrough };
 
-  const [apps, deals, completes, relisted] = await Promise.all([
+  const [apps, deals, completes, relisted, cancelled] = await Promise.all([
     applications(),
     getAllPropolyDeals().catch(() => null) as Promise<BusinessDeal[] | null>,
     getPropolyCompletes().catch(() => null) as Promise<CompletedDeal[] | null>,
     relists(),
+    /* Read here as well as off the held board, which may predate the cancel. */
+    allCancellations().then((all) => new Set(all.flatMap((c) => [c.ref, c.dealId ?? ""]).filter(Boolean))).catch(() => new Set<string>()),
   ]);
-  return decideTaken(live, apps, deals, completes, relisted);
+  return decideTaken(live, apps, deals, completes, relisted, cancelled);
 }
 
 /** The rule itself, on what was read - kept apart so it can be run on a day's real data. */
@@ -103,7 +106,8 @@ export function decideTaken(
   apps: Pick<Assembled, "applications" | "closed"> | null,
   deals: BusinessDeal[] | null,
   completes: CompletedDeal[] | null,
-  relisted: Map<string, string>
+  relisted: Map<string, string>,
+  cancelled: ReadonlySet<string> = new Set()
 ): { taken: Map<string, TakenState>; fellThrough: Map<string, TakenState> } {
   const taken = new Map<string, TakenState>();
   const fellThrough = new Map<string, TakenState>();
@@ -132,6 +136,15 @@ export function decideTaken(
       const at = a.dateAccepted ?? a.osDecision?.at ?? a.dateReceived ?? null;
       if (relistedAt && at && at < relistedAt) continue;
       const tenant = a.applicants.find((p) => p.isPrimary)?.name ?? a.applicants[0]?.name ?? null;
+      /* CANCELLED ON ITS PAGE (Sean McMahon, ticket c3f19197, 25 Nov 2026).
+         A let cancelled here kept its listing taken, as let agreed with no
+         Relist, so the home's other offers could not be gone back to. It fell
+         through: the listing says so and offers Relist, as a deal cancelled
+         in Propoly already does. */
+      if (apps?.closed.get(a.id) === "Deal cancelled" || cancelled.has(String(a.id))) {
+        fellThrough.set(String(l.id), { why: `Deal cancelled here${tenant ? ` for ${tenant}` : ""}${at ? ` (offer accepted ${words(at)})` : ""}`, at });
+        continue;
+      }
       found.push({ why: `Offer accepted${tenant ? ` for ${tenant}` : ""}${at ? ` on ${words(at)}` : ""}`, at });
     }
 
