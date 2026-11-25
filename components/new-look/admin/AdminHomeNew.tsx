@@ -9,6 +9,8 @@ import { can } from "@/lib/roles";
 import { AUDIT_KIND, when, type AdminData } from "@/lib/admin-client";
 import { areasFor, isAreaId, type AdminArea } from "@/components/new-look/admin/areas";
 import LeadsNotBackedUp from "@/components/LeadsNotBackedUp";
+import { MixRing, PmCard } from "@/components/new-look/dashboard/PmCharts";
+import { FxBars, useFx } from "@/components/new-look/figures/Kit";
 
 /**
  * Admin's home in the new look (lib/new-look "admin"): the design's Admin
@@ -77,6 +79,7 @@ function Home({ d, tickets }: { d: AdminData | null; tickets: AdminTicket[] | nu
     };
   }, []);
   const plc = usePlcWaiting(role);
+  const fx = useFx();
 
   if (role === undefined) return <Opening />;
   const areas = areasFor(role);
@@ -185,6 +188,33 @@ function Home({ d, tickets }: { d: AdminData | null; tickets: AdminTicket[] | nu
         </div>
         {!census ? (
           <p className="nl-adm-loading"><Spin /> Counting the team…</p>
+        ) : fx && s ? (
+          /* The census as a picture (lib/new-look "figures"): the same five
+             figures, the ring split by where each person stands. */
+          <div className="nl-fx-cards is-2">
+            <PmCard title="Who's Set Up" aside={<span className="nl-pmc-aside is-quiet">{s.staff} staff in REX</span>}>
+              <MixRing
+                parts={[
+                  { key: "Signed in", n: Math.max(0, s.withAccounts - s.neverSignedIn), tone: "olive" },
+                  { key: "Account, never signed in", n: s.neverSignedIn, tone: "clay" },
+                  { key: "Not invited", n: s.notInvited, tone: "terra" },
+                ]}
+                middle={s.withAccounts}
+                middleLabel="With accounts"
+              />
+            </PmCard>
+            <PmCard title="Still to Do" aside={<Link href="/admin/people" className="nl-pmc-aside">People</Link>}>
+              <FxBars
+                rows={[
+                  { label: "No headshot", value: s.noPhoto, tone: "clay" },
+                  { label: "Not invited", value: s.notInvited, tone: "terra" },
+                  { label: "Never signed in", value: s.neverSignedIn, tone: "clay" },
+                ]}
+                max={Math.max(1, s.staff)}
+              />
+              <p className="nl-fx-note">Out of {s.staff} staff. Each one opens on People.</p>
+            </PmCard>
+          </div>
         ) : (
           <ul className="nl-adm-census">
             {census.map((c) => (

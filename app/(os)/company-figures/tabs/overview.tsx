@@ -20,6 +20,7 @@ import type { SeedData, PeriodKpis } from "@/lib/business/seed-data";
 import type { StatValue } from "@/lib/business/types";
 import { formatGBPCompact, formatGBPExact, formatNum, monthLabel } from "@/lib/business/format";
 import { HISTORY_FLOOR, liveMonth, withinHistory } from "@/lib/business/roster";
+import { FxCell, FxColumns, FxFunnel, FxSection, FxStrip, type FxState, useFx } from "@/components/new-look/figures/Kit";
 
 
 interface LiveBusiness {
@@ -247,6 +248,7 @@ function Tile({
   /** Still being read: a spinner in place of the figure, never a number. */
   loading?: boolean;
 }) {
+  const fx = useFx();
   const isLive = stat.source.startsWith("live-");
   const isManual = stat.source === "manual";
   const value =
@@ -257,6 +259,20 @@ function Tile({
   const hover = [money != null ? formatGBPExact(money) : null, stat.note]
     .filter(Boolean)
     .join(" · ");
+  if (fx) {
+    const state: FxState = isLive ? "live" : isManual ? "manual" : stat.source === "unavailable" ? "none" : "derived";
+    return (
+      <FxCell
+        label={label}
+        value={value}
+        sub={sub}
+        state={state}
+        flag={flag ? <span title={flag}>Check</span> : null}
+        hover={hover}
+        loading={loading}
+      />
+    );
+  }
   return (
     <div
       className={`relative rounded-xl border text-center transition ${compact ? "p-2.5" : "p-3"} ${
@@ -303,6 +319,13 @@ function Tile({
 }
 
 const TILE_GRID = "grid gap-3 grid-cols-[repeat(auto-fit,minmax(140px,1fr))]";
+
+/** The tiles' row: a ruled strip in the house style, the old grid otherwise. */
+function Grid({ children, cols, headline = false }: { children: ReactNode; cols?: number; headline?: boolean }) {
+  const fx = useFx();
+  if (fx) return <FxStrip cols={cols}>{children}</FxStrip>;
+  return <div className={headline ? HEADLINE_GRID : TILE_GRID}>{children}</div>;
+}
 // Headline band: denser so seven tiles (two with £ figures) fit without
 // stretching the page or clipping the numbers.
 const HEADLINE_GRID = "grid gap-2.5 grid-cols-[repeat(auto-fit,minmax(122px,1fr))]";
@@ -409,6 +432,8 @@ function Section({
   source?: string;
   children: ReactNode;
 }) {
+  const fx = useFx();
+  if (fx) return <FxSection title={title} source={source ? `Source: ${source}` : undefined}>{children}</FxSection>;
   return (
     <section className="card p-5">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -432,6 +457,20 @@ function PeriodPills({
   active: string;
   onChange: (key: string) => void;
 }) {
+  const fx = useFx();
+  if (fx) {
+    return (
+      <div className="mb-4 overflow-x-auto">
+        <div className="nl-fx-pills" role="group" aria-label="Period">
+          {options.map((p) => (
+            <button key={p.key} type="button" onClick={() => onChange(p.key)} aria-pressed={p.key === active} className={p.key === active ? "is-on" : undefined}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="mb-3 flex flex-wrap gap-1.5">
       {options.map((p) => (
@@ -471,6 +510,7 @@ export default function Overview({ month }: { month: string }) {
   const [live, setLive] = useState<LiveBusiness | null>(null);
   /* Live Listings and the pipeline by the Listings board's own rule. */
   const stages = useListingStages();
+  const fx = useFx();
   const [liveLoading, setLiveLoading] = useState(false);
   const [hist, setHist] = useState<HistoryPayload | null>(null);
   /* The managed book, counted where Overview and the Dashboard count it
@@ -1358,11 +1398,18 @@ export default function Overview({ month }: { month: string }) {
     : rampPeriod.ramp.moveInWithin60Days;
 
   return (
-    <div className="space-y-5">
+    <div className={fx ? "nl-fx-stack" : "space-y-5"}>
       {/* ---- headline band ---- */}
       <div>
-        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className={fx ? "nl-fx-sec-h" : "mb-2 flex flex-wrap items-center gap-x-3 gap-y-1"}>
+          {fx ? (
+            <div className="min-w-0">
+              <h2 className="nl-fx-sec-t">The Year So Far</h2>
+              <p className="nl-fx-sec-sub">Year to date · {ytdWindowLabel} · live figures refresh on load.</p>
+            </div>
+          ) : (
           <h2 className="text-[13px] font-semibold uppercase tracking-wide">KPI Metrics</h2>
+          )}
           {moneyGaps.length ? (
             <span
               className="rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700"
@@ -1371,19 +1418,21 @@ export default function Overview({ month }: { month: string }) {
               £ figures incomplete - {moneyGaps.map((a) => (a === "uk" ? "E&W" : "Glasgow")).join(", ")} unreachable
             </span>
           ) : null}
+          {!fx ? (
           <span className="text-[11px] text-muted">
             Year to date · {ytdWindowLabel} · live tiles refresh on load
           </span>
+          ) : null}
           <button
             type="button"
             onClick={() => void loadLive(true)}
             disabled={liveLoading}
-            className="hide-when-presenting ml-auto inline-flex items-center gap-1 rounded-lg border border-line bg-card px-2.5 py-1 text-[12px] font-medium text-muted transition hover:text-ink disabled:opacity-50"
+            className={fx ? "hide-when-presenting nl-btn nl-btn--secondary nl-btn--sm" : "hide-when-presenting ml-auto inline-flex items-center gap-1 rounded-lg border border-line bg-card px-2.5 py-1 text-[12px] font-medium text-muted transition hover:text-ink disabled:opacity-50"}
           >
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M13 8a5 5 0 1 1-1.46-3.54M13 3v2.5h-2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            {liveLoading ? "Refreshing…" : "Refresh live"}
+            {liveLoading ? "Refreshing…" : fx ? "Refresh" : "Refresh live"}
           </button>
         </div>
         {staleLine ? (
@@ -1395,7 +1444,7 @@ export default function Overview({ month }: { month: string }) {
             {staleLine.text}
           </p>
         ) : null}
-        <div className={HEADLINE_GRID}>
+        <Grid headline cols={7}>
           <Tile label={`${ytdLabel} YTD MAs`} stat={hlMas.stat} flag={hlMas.flag} compact />
           <Tile label={`${ytdLabel} YTD Listings`} stat={hlListings.stat} flag={hlListings.flag} compact />
           <Tile label={`${ytdLabel} YTD Applications`} stat={hlApplications.stat} flag={hlApplications.flag} compact />
@@ -1466,12 +1515,12 @@ export default function Overview({ month }: { month: string }) {
             compact
           />
           <Tile label="Pipeline now" stat={hlPipeline} compact loading={!live?.propoly && liveLoading} />
-        </div>
+        </Grid>
       </div>
 
       {/* ---- 1. Agent Headcount ---- */}
       <Section title="Agent Headcount" source={d.sources.headcount}>
-        <div className={TILE_GRID}>
+        <Grid cols={4}>
           <Tile label="Active Agents" stat={hc.activeAgents} sub="Managing portfolio" />
           <Tile label="TLE" stat={hc.tle} sub="Full partner" />
           <Tile label="TLE Dual" stat={hc.tleDual} sub="Dual brand" />
@@ -1480,7 +1529,7 @@ export default function Overview({ month }: { month: string }) {
           <Tile label="Starters YTD" stat={hc.startersYtd} sub="TLE / TLE Dual · excl Lettings Lite" />
           <Tile label="Leavers YTD" stat={hc.leaversYtd} sub="TLE / TLE Dual · excl Lettings Lite" />
           <Tile label="Variance YTD" stat={hc.varianceYtd} sub="Net change TLE / TLE Dual" />
-        </div>
+        </Grid>
       </Section>
 
       {/* ---- 2. Partner Productivity & Ramp Time ---- */}
@@ -1493,12 +1542,12 @@ export default function Overview({ month }: { month: string }) {
         }
       >
         <PeriodPills options={rampPillOptions} active={rampKey} onChange={setRampKey} />
-        <div className={TILE_GRID}>
+        <Grid>
           <Tile label="New Starters" stat={rampNewStarters} sub={liveCohort ? null : subNote(rampPeriod.ramp.newStarters)} />
           <Tile label="MA in Months 1–2" stat={rampMa} sub={liveCohort ? null : subNote(rampPeriod.ramp.maInMonths1To2)} />
           <Tile label="Listing in Months 1–2" stat={rampListings} sub={liveCohort ? null : subNote(rampPeriod.ramp.listingInMonths1To2)} />
           <Tile label="Move-in within 60 Days" stat={rampMoveIns} sub={liveCohort ? null : subNote(rampPeriod.ramp.moveInWithin60Days)} />
-        </div>
+        </Grid>
         {liveCohort && liveCohort.length > 0 ? (
           <RampBreakdown starters={liveCohort} />
         ) : liveCohort && liveCohort.length === 0 ? (
@@ -1510,8 +1559,30 @@ export default function Overview({ month }: { month: string }) {
 
       {/* ---- 3. Business KPIs - Sales Funnel ---- */}
       <Section title={`Business KPIs - ${selLabel}`} source={d.sources.businessFunnel}>
+        {fx ? (
+          <div className="nl-fx-funnel-wrap">
+            <div>
+              <h3 className="nl-fx-mini">The Sales Funnel</h3>
+              <FxFunnel
+                steps={[
+                  { label: "Market appraisals", value: effMas.value ?? null, note: effMas.note },
+                  { label: "Listings", value: effListings.value ?? null, note: effListings.note },
+                  { label: "Viewings", value: effViewings.value ?? null, note: effViewings.note },
+                  { label: "Applications", value: effApplications.value ?? null, note: effApplications.note },
+                  { label: "Move-ins", value: effMoveIns.value ?? null, note: effMoveIns.note },
+                ]}
+              />
+              <p className="nl-fx-note">Each stage counted in the month on its own, not one group followed through. Hover a stage for where it comes from.</p>
+            </div>
+            <FxStrip cols={1}>
+              <Tile label="Live Listings" stat={funnelLiveListings} loading={stages === null} />
+              <Tile label="Forward Pipeline" stat={funnelPipeline} loading={!live?.propoly && liveLoading} />
+            </FxStrip>
+          </div>
+        ) : (
+        <>
         <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted">Sales Funnel</h3>
-        <div className={TILE_GRID}>
+        <Grid>
           <Tile label="Market Appraisals" stat={effMas} flag={hMas?.flag} />
           <Tile label="Listings" stat={effListings} flag={hListings?.flag} />
           <Tile label="Viewings" stat={effViewings} flag={hViewings?.flag} />
@@ -1519,13 +1590,15 @@ export default function Overview({ month }: { month: string }) {
           <Tile label="Move-ins" stat={effMoveIns} flag={hMoveIns?.flag} />
           <Tile label="Live Listings" stat={funnelLiveListings} loading={stages === null} />
           <Tile label="Forward Pipeline" stat={funnelPipeline} loading={!live?.propoly && liveLoading} />
-        </div>
+        </Grid>
+        </>
+        )}
       </Section>
 
       {/* ---- 4. Conversion Rates ---- */}
       {/* Follows the Business KPIs pill, exactly as on her dashboard. */}
       <Section title={`Conversion Rates - ${periodLabelBit}`} source={d.sources.conversions}>
-        <div className={TILE_GRID}>
+        <Grid>
           <Tile label="MA → Listing" stat={convMaToListing} sub={subNote(convMaToListing)} />
           <Tile label="Listing → Move-in" stat={convListingToMoveIn} sub={subNote(convListingToMoveIn)} />
           <Tile label="RLP Conversion" stat={convRlp} sub={subNote(convRlp)} />
@@ -1543,7 +1616,7 @@ export default function Overview({ month }: { month: string }) {
             stat={liveGciPerAgent ?? kpiPeriod.conversions.gciPerAgent}
             sub={subNote(liveGciPerAgent ?? kpiPeriod.conversions.gciPerAgent)}
           />
-        </div>
+        </Grid>
       </Section>
 
       {/* ---- 5. MAs by Partner Type ---- */}
@@ -1551,7 +1624,7 @@ export default function Overview({ month }: { month: string }) {
         title={`Market Appraisals by Partner Type${mbt ? ` - ${periodLabelBit}` : ""}`}
         source={d.sources.masByPartnerType}
       >
-        <div className={TILE_GRID}>
+        <Grid>
           <Tile label="Total Appraisals" stat={masTiles.total} />
           <Tile
             label="TLE Partners"
@@ -1564,11 +1637,21 @@ export default function Overview({ month }: { month: string }) {
             sub={mbt ? null : "Split is live-month only"}
           />
           <Tile label="Lettings Lite" stat={d.masByPartnerType.lettingsLite} />
-        </div>
+        </Grid>
       </Section>
 
       {/* ---- 6. Monthly GCI vs Budget ---- */}
       <Section title="Monthly GCI vs Budget" source={d.sources.income}>
+        {fx ? (
+          <FxColumns
+            labels={d.gciByMonth.labels}
+            series={[{ name: "Actual GCI (exc VAT)", tone: "clay", values: d.gciByMonth.actual }]}
+            format={(n) => `£${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}k`}
+            nowIndex={d.gciByMonth.labels.indexOf(MONTH_ABBR[Number(LIVE.slice(5, 7)) - 1])}
+            details={d.gciByMonth.detail}
+            height={280}
+          />
+        ) : (
         <Bars
           labels={d.gciByMonth.labels}
           series={[{ name: "Actual GCI (exc VAT)", color: "#c4a092", values: d.gciByMonth.actual }]}
@@ -1576,13 +1659,14 @@ export default function Overview({ month }: { month: string }) {
           height={240}
           details={d.gciByMonth.detail}
         />
+        )}
         <p className="hide-when-presenting mt-2 text-[11px] text-muted">{d.gciByMonth.budgetNote}</p>
       </Section>
 
       {/* ---- 7. Year on Year Growth ---- */}
       {/* Like-for-like: 1 Jan → today vs the same window last year. */}
       <Section title="Year on Year Growth" source={d.sources.yoyGrowth}>
-        <div className={TILE_GRID}>
+        <Grid>
           {d.yoyGrowth.map((g) => {
             // Total portfolio: the managed book, the same count as Overview
             // and the Dashboard (see `book` above). Never the snapshot.
@@ -1671,7 +1755,7 @@ export default function Overview({ month }: { month: string }) {
             }
             return <Tile key={g.label} label={g.label} stat={g.stat} sub={subNote(g.stat)} />;
           })}
-        </div>
+        </Grid>
       </Section>
 
       {live?.totals ? (

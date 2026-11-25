@@ -9,6 +9,8 @@ import { PresentProvider, usePresent } from "@/components/business/PresentMode";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
 import { currentMonth, monthLabel, monthProgressLabel, recentMonths } from "@/lib/business/format";
 import { periodsFor } from "@/lib/business/periods";
+import { useNewLook } from "@/lib/use-new-look";
+import { FxOn } from "@/components/new-look/figures/Kit";
 import { BUSINESS_TABS, PRESENT_KEYS } from "./rail";
 
 /**
@@ -58,6 +60,9 @@ function Frame({ children }: { children: React.ReactNode }) {
   const [seed, setSeed] = useState<SeedData | null>(null);
   const [seedError, setSeedError] = useState<string | null>(null);
   const [autoCycle, setAutoCycle] = useState(false);
+  /* The house style (lib/new-look "figures", 25 Nov 2026): the PM Dashboard's
+     look over every tab. Looks only; the same figures from the same places. */
+  const fx = useNewLook("figures") === true;
 
   const key = path.split("/")[2] ?? "overview";
   const tab = BUSINESS_TABS.find((t) => t.key === key) ?? BUSINESS_TABS[0];
@@ -127,75 +132,114 @@ function Frame({ children }: { children: React.ReactNode }) {
 
   return (
     <Ctx.Provider value={{ month, period: picked?.key ?? null, seed, seedError }}>
-      <div className="type-admin biz-os">
+      <div className={fx ? "type-admin biz-os nl-fx nl-pm nl-edge" : "type-admin biz-os"} data-look={fx ? "new" : undefined}>
         {presenting ? (
           <style>{`[data-admin-rail], [data-os-back] { display: none !important; }`}</style>
         ) : null}
 
-        <header className="fade-up mb-6 flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-dark">My Business</p>
-            <h1 className="mt-1.5 leading-[1.02] text-[clamp(30px,2.6vw,44px)]">{tab.label}</h1>
-            {!presenting ? (
-              <p className="mt-2 max-w-[68ch] leading-relaxed text-muted text-[clamp(13px,0.95vw,15px)]">{tab.blurb}</p>
-            ) : null}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            <span className={`rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${live ? "bg-accent-soft text-accent-dark" : "bg-panel text-muted"}`}>
-              {status}
-            </span>
-            {!presenting ? <Freshness /> : null}
-            {periods.length ? (
-              <PickOne
-                value={picked?.key ?? "month"}
-                onChange={(v) => setPeriod(!v || v === "month" ? null : v)}
-                clearable={false}
-                neutral="month"
-                label="Period"
-                icon="calendar"
-                options={periodOptions}
-              />
-            ) : null}
-            {/* A quarter or the year names its own months, so the month picker
-                stands aside while one is picked. */}
-            {!picked ? (
-              <PickOne
-                value={month}
-                onChange={(v) => setMonth(v ?? month)}
-                clearable={false}
-                label="Month"
-                icon="calendar"
-                options={monthOptions}
-              />
-            ) : null}
-            {presenting ? (
+        {fx ? (
+          <header className="nl-fx-mast">
+            <div className="nl-fx-mast-words">
+              <p className="nl-eyebrow">My Business</p>
+              <h1 className="nl-title">{tab.label}</h1>
+              {!presenting ? <p className="nl-blurb">{tab.blurb}</p> : null}
+            </div>
+            <div className="nl-fx-mast-tools">
+              <span className={`nl-fx-status${live ? " is-live" : ""}`}>
+                <i aria-hidden />
+                {status}
+              </span>
+              {!presenting ? <Freshness /> : null}
+              {periods.length ? (
+                <PickOne
+                  value={picked?.key ?? "month"}
+                  onChange={(v) => setPeriod(!v || v === "month" ? null : v)}
+                  clearable={false}
+                  neutral="month"
+                  label="Period"
+                  icon="calendar"
+                  options={periodOptions}
+                />
+              ) : null}
+              {!picked ? (
+                <PickOne value={month} onChange={(v) => setMonth(v ?? month)} clearable={false} label="Month" icon="calendar" options={monthOptions} />
+              ) : null}
+              {presenting ? (
+                <button type="button" onClick={() => setAutoCycle((v) => !v)} aria-pressed={autoCycle} className={`nl-btn nl-btn--secondary nl-btn--sm${autoCycle ? " is-on" : ""}`}>
+                  {autoCycle ? "Auto-cycle on" : "Auto-cycle"}
+                </button>
+              ) : null}
+              <button type="button" onClick={toggle} aria-pressed={presenting} className={`nl-btn nl-btn--sm ${presenting ? "nl-btn--primary" : "nl-btn--secondary"}`}>
+                {presenting ? "Exit presenting" : "Present"}
+              </button>
+            </div>
+          </header>
+        ) : (
+      <header className="fade-up mb-6 flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-dark">My Business</p>
+              <h1 className="mt-1.5 leading-[1.02] text-[clamp(30px,2.6vw,44px)]">{tab.label}</h1>
+              {!presenting ? (
+                <p className="mt-2 max-w-[68ch] leading-relaxed text-muted text-[clamp(13px,0.95vw,15px)]">{tab.blurb}</p>
+              ) : null}
+            </div>
+  
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className={`rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${live ? "bg-accent-soft text-accent-dark" : "bg-panel text-muted"}`}>
+                {status}
+              </span>
+              {!presenting ? <Freshness /> : null}
+              {periods.length ? (
+                <PickOne
+                  value={picked?.key ?? "month"}
+                  onChange={(v) => setPeriod(!v || v === "month" ? null : v)}
+                  clearable={false}
+                  neutral="month"
+                  label="Period"
+                  icon="calendar"
+                  options={periodOptions}
+                />
+              ) : null}
+              {/* A quarter or the year names its own months, so the month picker
+                  stands aside while one is picked. */}
+              {!picked ? (
+                <PickOne
+                  value={month}
+                  onChange={(v) => setMonth(v ?? month)}
+                  clearable={false}
+                  label="Month"
+                  icon="calendar"
+                  options={monthOptions}
+                />
+              ) : null}
+              {presenting ? (
+                <button
+                  type="button"
+                  onClick={() => setAutoCycle((v) => !v)}
+                  aria-pressed={autoCycle}
+                  className={`rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold transition ${
+                    autoCycle ? "border-accent-dark bg-accent-dark text-white" : "border-line/80 bg-card text-ink hover:border-ink/40"
+                  }`}
+                >
+                  {autoCycle ? "Auto-cycle on" : "Auto-cycle"}
+                </button>
+              ) : null}
               <button
                 type="button"
-                onClick={() => setAutoCycle((v) => !v)}
-                aria-pressed={autoCycle}
-                className={`rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold transition ${
-                  autoCycle ? "border-accent-dark bg-accent-dark text-white" : "border-line/80 bg-card text-ink hover:border-ink/40"
+                onClick={toggle}
+                aria-pressed={presenting}
+                className={`flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold transition ${
+                  presenting ? "border-accent-dark bg-accent-dark text-white" : "border-line/80 bg-card text-ink hover:border-ink/40"
                 }`}
               >
-                {autoCycle ? "Auto-cycle on" : "Auto-cycle"}
+                <span className={presenting ? "" : "text-accent-dark"}>
+                  <DoodleIcon name="dashboard" size={14} />
+                </span>
+                {presenting ? "Exit presenting" : "Present"}
               </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={toggle}
-              aria-pressed={presenting}
-              className={`flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold transition ${
-                presenting ? "border-accent-dark bg-accent-dark text-white" : "border-line/80 bg-card text-ink hover:border-ink/40"
-              }`}
-            >
-              <span className={presenting ? "" : "text-accent-dark"}>
-                <DoodleIcon name="dashboard" size={14} />
-              </span>
-              {presenting ? "Exit presenting" : "Present"}
-            </button>
-          </div>
-        </header>
+            </div>
+          </header>
+        )}
 
         {presenting ? (
           <div className="mb-5 flex items-center gap-2">
@@ -213,7 +257,7 @@ function Frame({ children }: { children: React.ReactNode }) {
           {seedError ? (
             <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800">{seedError}</p>
           ) : seed ? (
-            children
+            fx ? <FxOn>{children}</FxOn> : children
           ) : (
             <div className="flex items-center gap-2 text-[13px] text-muted" aria-busy="true">
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />

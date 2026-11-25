@@ -59,6 +59,9 @@ export const LOOK_SCREENS = [
   { id: "advert", label: "Edit advert", what: "The advert editor on a listing." },
   { id: "help", label: "Help", what: "Guides and help." },
   { id: "admin", label: "Admin", what: "Admin's home, People and the admin tools." },
+  /* The back end tidied (James, 25 Nov 2026: "go through every single tab ... get this in line with the other
+     pages ... produce things like graphics where applicable"). Looks only: the same figures, the same sources. */
+  { id: "figures", label: "Susan's figures and Admin, tidied", what: "Every tab of My Business (Susan's figures) and every Admin screen in the house style the PM Dashboard has: titles in the condensed capitals, square boxes on fine lines, the figures larger, the brand colours, and charts where a run of months or a split reads better as a picture. The same figures from the same places. Off, the screens as they are." },
   /* Not a reskin: a new way of working (James, 24 Oct 2026), so it carries its own warning. */
   /* The fade between screens in place of the fold-and-drop (James, 24 Oct 2026): every screen, so its own switch. */
   { id: "fade", label: "Page transitions", what: "Moving between screens: a slow fade out and a slow fade in, in place of the page folding and dropping away." },

@@ -25,6 +25,8 @@ import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased 
 import { formatGBP, monthLabel } from "@/lib/business/format";
 import { liveMonth } from "@/lib/business/roster";
 import { BOOK_REGIONS, type BookRegion, type BookRegionOrUnknown } from "@/lib/business/book-regions";
+import { FxBars, FxCards, useFx } from "@/components/new-look/figures/Kit";
+import { MixRing, PmCard } from "@/components/new-look/dashboard/PmCharts";
 import type { PortfolioGrowth } from "@/lib/business/book-record"; // type-only - erased at build
 
 const LIVE_PARTNER_COLUMNS = [
@@ -158,6 +160,7 @@ function SplitTile({
 
 export default function PortfolioTab({ month }: { month: string; seed: SeedData }) {
   const [live, setLive] = useState<LiveBook | null>(null);
+  const fx = useFx();
   const [liveError, setLiveError] = useState<string | null>(null);
   const [prot, setProt] = useState<Protection | null>(null);
   const [protFailed, setProtFailed] = useState(false);
@@ -503,6 +506,36 @@ export default function PortfolioTab({ month }: { month: string; seed: SeedData 
             parts={regionParts((k) => fmt(regionCount(k, LEVELS.rentCollect)))}
           />
         </div>
+        {fx && live && regions ? (
+          /* The book as two pictures (lib/new-look "figures"): the same
+             counts as the tiles above, by service and by where the homes are. */
+          <FxCards cols={2}>
+            <PmCard title="The Book by Service" aside={<span className="nl-pmc-aside is-quiet">PayProp</span>}>
+              <MixRing
+                parts={[
+                  { key: "Managed", n: levelCount(LEVELS.managed) ?? 0, tone: "olive" },
+                  { key: "Let only", n: levelCount(LEVELS.letOnly) ?? 0, tone: "clay" },
+                  { key: "Rent collection", n: levelCount(LEVELS.rentCollect) ?? 0, tone: "terra" },
+                  ...(notSet ? [{ key: "Not set", n: notSet, tone: "sage" as const }] : []),
+                ]}
+                middle={live.totalProperties}
+                middleLabel="Homes"
+              />
+            </PmCard>
+            <PmCard title="Where the Homes Are" aside={<span className="nl-pmc-aside is-quiet">By postcode</span>}>
+              <FxBars
+                rows={BOOK_REGIONS.map((r, i) => ({
+                  key: r.key,
+                  label: r.short,
+                  value: regions[r.key]?.properties ?? 0,
+                  sub: regions[r.key] ? `${gbp(regions[r.key].rentRoll)} a month` : undefined,
+                  tone: (["olive", "clay", "terra", "brown", "sage"] as const)[i % 5],
+                }))}
+              />
+              {unknownHomes.length ? <p className="nl-fx-note">{unknownHomes.length} more with no postcode in PayProp, so in no region.</p> : null}
+            </PmCard>
+          </FxCards>
+        ) : null}
         {regions && unknownHomes.length ? (
           <details className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
             <summary className="cursor-pointer">

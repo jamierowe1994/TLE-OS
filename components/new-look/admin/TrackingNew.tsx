@@ -7,6 +7,8 @@ import { NlFailed, NlFig, NlLoading } from "@/components/new-look/admin/ScreenBi
 import { PeriodBarNew, SourceErrorsNew, SourcesNew } from "@/components/new-look/admin/TrackingKitNew";
 import { duration, n, pct, queryString, type TrackingQuery } from "@/components/admin/tracking/kit";
 import type { Overview } from "@/components/admin/tracking/types";
+import { FxBars, useFx } from "@/components/new-look/figures/Kit";
+import { PmCard } from "@/components/new-look/dashboard/PmCharts";
 
 /**
  * Usage > Tracking in the new look (lib/new-look "admin", 24 Oct 2026): which
@@ -36,6 +38,7 @@ export default function TrackingNew({
   reload: () => void;
   personName: string | null;
 }) {
+  const fx = useFx();
   const qs = t ? queryString(t) : "";
   const link = (key: string) => `/admin/tracking/${key}?${qs}`;
 
@@ -109,6 +112,33 @@ export default function TrackingNew({
               href={link("pages")}
             />
           </ul>
+
+          {/* The parts as two pictures (lib/new-look "figures"): the same
+              opens and done counts as the cards below, busiest first. */}
+          {fx ? (
+            <div className="nl-fx-cards is-2 nl-adm-block">
+              <PmCard title="Opens by Part" aside={<span className="nl-pmc-aside is-quiet">Screens opened</span>}>
+                <FxBars
+                  rows={d.sections
+                    .filter((x) => x.hasPages && x.opens > 0)
+                    .sort((a, b) => b.opens - a.opens)
+                    .slice(0, 10)
+                    .map((x) => ({ key: x.key, label: x.label, value: x.opens, sub: `${n(x.people)} ${x.people === 1 ? "person" : "people"}`, tone: "clay" as const }))}
+                  format={n}
+                />
+              </PmCard>
+              <PmCard title="Done by Part" aside={<span className="nl-pmc-aside is-quiet">Saved, sent or changed</span>}>
+                <FxBars
+                  rows={d.sections
+                    .filter((x) => x.actions > 0)
+                    .sort((a, b) => b.actions - a.actions)
+                    .slice(0, 10)
+                    .map((x) => ({ key: x.key, label: x.label, value: x.actions, tone: "olive" as const }))}
+                  format={n}
+                />
+              </PmCard>
+            </div>
+          ) : null}
 
           {/* ── every part of the OS ── */}
           <section className="nl-adm-block">

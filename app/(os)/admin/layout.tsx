@@ -8,6 +8,7 @@ import { workspacesFor } from "@/lib/nav";
 import { can, type Capability } from "@/lib/roles";
 import { fetchMe } from "@/lib/me";
 import { useNewLook } from "@/lib/use-new-look";
+import { FxOn } from "@/components/new-look/figures/Kit";
 import { areasFor, whereIs } from "@/components/new-look/admin/areas";
 import AdminTabsHead from "@/components/new-look/admin/AdminTabsHead";
 import { Ico } from "@/components/new-look/Parts";
@@ -222,6 +223,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
      area on every admin screen. Null until known, and the rail waits for it
      rather than drawing the old groups and swapping them. */
   const look = useNewLook("admin");
+  /* The house style over every admin screen (lib/new-look "figures", 25 Nov
+     2026): the PM Dashboard's capitals, square boxes and fine lines. */
+  const fx = useNewLook("figures") === true;
 
   useEffect(() => {
     let gone = false;
@@ -336,7 +340,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {look ? (
           /* The older admin screens inside the new frame take its colours and
              type from the scoped tokens; their workings are untouched. */
-          <div data-look="new" className="nl-adm-main min-w-0 flex-1">
+          <div data-look="new" className={`nl-adm-main min-w-0 flex-1${fx ? " nl-fx nl-fx-adm nl-pm nl-edge" : ""}`}>
             {back && (
               <div className="nl-page nl-crumbs nl-adm-back">
                 <Link href={back.href} className="nl-crumb">
@@ -345,7 +349,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </div>
             )}
             {!teamOnly && <AdminTabsHead path={pathname} role={role ?? null} />}
-            {children}
+            {fx ? <FxOn>{children}</FxOn> : children}
           </div>
         ) : (
           <div className="min-w-0 flex-1 py-3">{children}</div>

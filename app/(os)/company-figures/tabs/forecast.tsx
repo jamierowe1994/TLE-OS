@@ -9,6 +9,7 @@
 // plus the Business Value cards, baseline costs and H2 reforecast P&L from
 // the (admin-gated) seed.
 
+import { useFx } from "@/components/new-look/figures/Kit";
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import StatCard from "@/components/business/StatCard";
@@ -126,6 +127,7 @@ function isForecastsPayload(payload: unknown): payload is ForecastsPayload {
 /* --------------------------------- tab --------------------------------- */
 
 export default function Forecast({ month, seed }: { month: string; seed: SeedData }) {
+  const fx = useFx();
   const [data, setData] = useState<ForecastsPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -392,7 +394,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
               series={[
                 { name: "Susan", color: "#56423e", values: series.rows.map((r) => r.susan) },
                 { name: "Partners", color: "#c4a092", values: series.rows.map((r) => r.partners) },
-                { name: "Actual", color: "#8d9b78", values: series.rows.map((r) => r.actual) },
+                { name: "Actual", color: fx ? "#56634a" : "#8d9b78", values: series.rows.map((r) => r.actual) },
               ]}
               format={(n) => `£${Math.round(n / 1000)}k`}
               height={240}

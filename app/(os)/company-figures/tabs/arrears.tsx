@@ -6,6 +6,7 @@
 // import lib/seed-data.ts here, or the tenant data ships in the public bundle.
 // PayProp-sourced (no API access yet) - PayProp arrears report 2026-07-06.
 
+import { FxColumns, useFx } from "@/components/new-look/figures/Kit";
 import { useCallback, useEffect, useState } from "react";
 import { londonToday } from "@/lib/london-clock";
 import SourceNote from "@/components/business/SourceNote";
@@ -120,6 +121,7 @@ const daysBetween = (from: string, to: string) =>
   Math.max(0, Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000));
 
 export default function ArrearsTab({ month, seed }: { month: string; seed: SeedData }) {
+  const fx = useFx();
 
   // PayProp gathers in the background, so poll until it lands rather than
   // sitting on the snapshot for the whole session.
@@ -437,6 +439,17 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
               this DOES follow the month picker
             </span>
           </div>
+          {fx ? (
+            <div className="nl-fx-chartbox">
+              <FxColumns
+                labels={collection.map((r) => monthLabel(String(r.month)).slice(0, 3))}
+                series={[{ name: "Rent collected", tone: "olive", values: collection.map((r) => (r.held === false ? null : Number(r.rentCollected))) }]}
+                format={(n) => `£${Math.round(n / 1000)}k`}
+                nowIndex={collection.findIndex((r) => r.partial)}
+                height={200}
+              />
+            </div>
+          ) : null}
           <DataTable
             columns={[
               { key: "month", label: "Month", render: (r) => monthLabel(String(r.month)) },

@@ -17,6 +17,10 @@ import PlanUpload from "@/components/business/PlanUpload";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
 import type { PnlYear, PnlRow, PnlColumn } from "@/lib/business/pnl-build";
 import { formatGBP, formatDate } from "@/lib/business/format";
+import { FxCards, FxColumns, useFx } from "@/components/new-look/figures/Kit";
+import { PmCard } from "@/components/new-look/dashboard/PmCharts";
+
+const K = (n: number) => `${n < 0 ? "-" : ""}£${(Math.abs(n) / 1000).toFixed(1)}k`;
 
 const SHORT = (m: string) =>
   new Date(`${m}-01T00:00:00Z`).toLocaleString("en-GB", { month: "short", timeZone: "UTC" });
@@ -43,6 +47,7 @@ export default function PnlTab({ month }: { month: string; seed: SeedData }) {
   const year = Number(month.slice(0, 4));
   const [data, setData] = useState<PnlYear | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const fx = useFx();
 
   const load = useCallback(async () => {
     setError(null);
@@ -148,6 +153,8 @@ export default function PnlTab({ month }: { month: string; seed: SeedData }) {
         </p>
       ) : null}
 
+      {fx ? <PnlPictures data={data} awaiting={awaiting} /> : null}
+
       <section className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -202,6 +209,50 @@ export default function PnlTab({ month }: { month: string; seed: SeedData }) {
         </p>
       </section>
     </div>
+  );
+}
+
+/**
+ * The year as two pictures (lib/new-look "figures", 25 Nov 2026): income
+ * against costs for every month that has happened, and the profit or loss
+ * each closed month made. The same rows as the table below, nothing else.
+ */
+function PnlPictures({ data, awaiting }: { data: PnlYear; awaiting: Set<string> }) {
+  const row = (k: string) => data.rows.find((r) => r.key === k);
+  const income = row("income");
+  const cos = row("cos");
+  const exp = row("expenditure");
+  const net = row("net");
+  const cols = data.columns.filter((c) => c.kind !== "plan");
+  if (!income || !cols.length) return null;
+  const labels = cols.map((c) => SHORT(c.month));
+  const v = (r: PnlRow | undefined, m: string) => r?.cells[m]?.value ?? null;
+  const costs = cols.map((c) => {
+    const a = v(cos, c.month);
+    const b = v(exp, c.month);
+    return a == null && b == null ? null : (a ?? 0) + (b ?? 0);
+  });
+  const nowIndex = cols.findIndex((c) => c.kind === "mtd");
+  const profit = cols.map((c) => (c.kind === "actual" && !awaiting.has(c.month) ? v(net, c.month) : null));
+  return (
+    <FxCards cols={2}>
+      <PmCard title="Income Against Costs" aside={<span className="nl-pmc-aside is-quiet">Each month so far</span>}>
+        <FxColumns
+          labels={labels}
+          series={[
+            { name: "Total income", tone: "clay", values: cols.map((c) => v(income, c.month)) },
+            { name: "Cost of sales and expenditure", tone: "brown", values: costs },
+          ]}
+          format={K}
+          nowIndex={nowIndex}
+          average={false}
+          height={220}
+        />
+      </PmCard>
+      <PmCard title="Profit or Loss" aside={<span className="nl-pmc-aside is-quiet">Closed months with accounts</span>}>
+        <FxColumns labels={labels} series={[{ name: "Net profit / (loss)", tone: "olive", values: profit }]} format={K} average={false} negatives height={220} />
+      </PmCard>
+    </FxCards>
   );
 }
 

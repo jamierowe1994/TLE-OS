@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import StatCard from "@/components/business/StatCard";
 import DataTable, { type DataTableColumn } from "@/components/business/DataTable";
 import Donut from "@/components/business/charts/Donut";
+import { FxBars, FxColumns, FxSplit, useFx } from "@/components/new-look/figures/Kit";
 import Bars from "@/components/business/charts/Bars";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
 import type { IncomeMonthlyRow, LicenceFeeRow } from "@/lib/business/seed-types";
@@ -204,6 +205,7 @@ const METRIC_ROWS = [
 ] as const;
 
 export default function IncomeTab({ month, seed }: { month: string; seed: SeedData }) {
+  const fx = useFx();
   const inc = seed.income;
 
   // Live money from PayProp - gathered in the background, so poll for it.
@@ -708,6 +710,9 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
 
           <div className="card p-5">
             <h3 className="text-[13px] font-semibold">Agency income by fee type</h3>
+            {fx ? (
+              <FxBars rows={live.byCategory.map((c) => ({ label: c.category, value: c.amount }))} format={(n) => gbp(n)} />
+            ) : (
             <div className="mt-3 space-y-1.5">
               {live.byCategory.map((c) => (
                 <div key={c.category} className="flex items-center gap-3">
@@ -722,6 +727,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
                 </div>
               ))}
             </div>
+            )}
           </div>
         </section>
       ) : null}
@@ -814,7 +820,18 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
           <div className="mt-4">
             {/* A donut of two nulls draws itself as an empty ring and reads as
                 "nothing earned". Say there is no figure instead. */}
-            {live ? (
+            {live && fx ? (
+              <>
+                <p className="nl-fx-split-total">{gbp(live.combinedGci)}<span>combined, exc VAT</span></p>
+                <FxSplit
+                  parts={[
+                    { label: "TLE net", value: Math.round(live.agencyIncome), tone: "clay" },
+                    { label: "Associates", value: Math.round(live.paidToBeneficiaries), tone: "brown" },
+                  ]}
+                  format={(n) => gbp(n)}
+                />
+              </>
+            ) : live ? (
               <Donut
                 segments={[
                   { label: "TLE net", value: Math.round(live.agencyIncome), color: "#c4a092" },
@@ -910,6 +927,9 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
           {prev?.byCategory?.length ? (
             <div className="card mt-4 p-5">
               <h3 className="text-[13px] font-semibold">Agency income by fee type - {prevLabel}</h3>
+              {fx ? (
+                <FxBars rows={prev.byCategory.map((c) => ({ label: c.category, value: c.amount }))} format={(n) => gbp(n)} />
+              ) : (
               <div className="mt-3 space-y-1.5">
                 {prev.byCategory.map((c) => (
                   <div key={c.category} className="flex items-center gap-3">
@@ -922,6 +942,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
                   </div>
                 ))}
               </div>
+              )}
             </div>
           ) : null}
         </section>
@@ -949,7 +970,17 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
           separate bank account, so PayProp cannot see them and no live total exists yet.
         </p>
         <div className="mt-4">
+          {fx ? (
+            <FxColumns
+              labels={barLabels}
+              series={barSeries.map((x, i) => ({ name: x.name, tone: i === 0 ? "clay" : "brown", values: x.values }))}
+              format={(n) => `£${formatNum(n / 1000)}k`}
+              average={false}
+              height={260}
+            />
+          ) : (
           <Bars labels={barLabels} series={barSeries} format={(n) => `£${formatNum(n / 1000)}k`} />
+          )}
         </div>
       </section>
 
