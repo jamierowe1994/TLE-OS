@@ -349,6 +349,11 @@ const CARD_EFFECT: Record<Proposal["kind"], string> = {
   remove: "This takes it away for good. Nothing else is touched.",
 };
 
+/* A recording with no words cost the most to look at and said the least: 12
+   of 365 reports were only "Screen recording attached." (25 Nov 2026). One
+   line lets it be sorted and fixed without watching the whole clip first. */
+const NEEDS_A_LINE = "Add a line about it first: what did you expect to happen?";
+
 /* Not inside the iPhone app (James, 2 Oct 2026): the app's floating nav bar
    sits where Steve's corner is, so he would be caught behind it. He comes
    back to the app another way later. The app's user agent ends TLEOSApp/<v>. */
@@ -2138,7 +2143,7 @@ function Dock() {
         value={fb}
         onChange={(e) => setFb(e.target.value)}
         rows={4}
-        placeholder="What were you doing, and what happened?"
+        placeholder={rec.clip || pics.length ? "In a line: what did you expect to happen?" : "What were you doing, and what happened?"}
         className="mt-3 w-full rounded-2xl border border-line/80 bg-box p-3 text-[12.5px] outline-none transition-colors focus:border-ink"
       />
 
@@ -2233,12 +2238,15 @@ function Dock() {
       {!finding && (
       <button
         type="button"
-        disabled={busy || !(fb.trim() || rec.clip || pics.length)}
+        disabled={busy || !fb.trim()}
         onClick={pressSend}
         className="mt-2 w-full rounded-full bg-accent-dark py-2.5 text-[12.5px] font-semibold text-white transition-opacity disabled:opacity-40"
       >
         {sendLabel}
       </button>
+      )}
+      {!finding && !fb.trim() && (rec.clip || pics.length > 0) && (
+        <p className="mt-1.5 text-center text-[11.5px] text-muted">{NEEDS_A_LINE}</p>
       )}
       {offer && !busy && !finding && (
         <button type="button" onClick={() => void sendFeedback(turnedDown)} className="sv-fix-anyway">
@@ -2349,7 +2357,7 @@ function Dock() {
       <textarea
         value={fb}
         onChange={(e) => setFb(e.target.value)}
-        placeholder={kind === "idea" ? "What would make it better?" : kind === "confusing" ? "What were you trying to do?" : "What were you doing, and what happened?"}
+        placeholder={rec.clip || pics.length ? "In a line: what did you expect to happen?" : kind === "idea" ? "What would make it better?" : kind === "confusing" ? "What were you trying to do?" : "What were you doing, and what happened?"}
         aria-label="Tell us what happened"
         className="sv-rp-box"
       />
@@ -2416,10 +2424,11 @@ function Dock() {
 
       {fixCard}
       {!finding && (
-        <button type="button" disabled={busy || !(fb.trim() || rec.clip || pics.length)} onClick={pressSend} className="sv-rp-send">
+        <button type="button" disabled={busy || !fb.trim()} onClick={pressSend} className="sv-rp-send">
           {sendLabel}
         </button>
       )}
+      {!finding && !fb.trim() && (rec.clip || pics.length > 0) && <p className="sv-rp-need">{NEEDS_A_LINE}</p>}
       {offer && !busy && !finding && (
         <button type="button" onClick={() => void sendFeedback(turnedDown)} className="sv-fix-anyway">
           Send it to James anyway
