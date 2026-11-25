@@ -78,6 +78,7 @@ export const TIMERS: Timer[] = [
     lateMs: 27 * HOUR,
   },
   { id: "compliance-warm", service: "os-cron-compliance-warm", label: "The late morning run", every: "daily, late morning", does: "The compliance book warmed and the day's portal figures for every live home", paths: ["/api/compliance/warm", "/api/listings/stats/sweep"], lateMs: 27 * HOUR },
+  { id: "listings-warm", service: "os-cron-listings-warm", label: "The listing books warm", every: "daily, early morning", does: "Each agent's listing book read before they arrive, so Listings and Send Properties open straight away", paths: ["/api/listings/warm"], lateMs: 27 * HOUR },
   { id: "book-health", service: "os-cron-book-health", label: "Book health check", every: "Mondays, early morning", does: "The weekly book health email", paths: ["/api/book-health/run"], lateMs: 8 * 24 * HOUR },
 ];
 
