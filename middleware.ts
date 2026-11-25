@@ -499,6 +499,7 @@ const MACHINE_ROUTES = [
      TWILIO_AUTH_TOKEN, 401 on a signature that does not check out. */
   "/api/sms/inbound",
   "/api/maintenance/snapshot",        // the maintenance board's figures, daily
+  "/api/merch/makers/check",          // merch orders: ask the makers how each is going, daily
   "/api/radar/run",                   // Landlord Radar: sweep the patch, rescore, digest
   "/api/bond/company-sync",           // Bond: read the Land Registry company files, monthly
   "/api/bond/sales-sync",             // Bond: read the Land Registry price-paid file, monthly

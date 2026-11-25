@@ -3,7 +3,7 @@
 import "@/app/merch.css";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MERCH, type MerchLine, type MerchProduct } from "@/lib/merch-catalogue";
+import { MERCH, type MerchDelivery, type MerchLine, type MerchProduct } from "@/lib/merch-catalogue";
 
 /**
  * The merch shop (James, 24 Nov 2026): "a really unique-looking hero page,
@@ -17,9 +17,20 @@ import { MERCH, type MerchLine, type MerchProduct } from "@/lib/merch-catalogue"
  * no prices until James sets them (lib/merch).
  */
 
-type Order = { id: string; lines: MerchLine[]; notes: string; status: string; createdAt: string; userName?: string };
+type Job = { maker: string; stage: string; carrier: string | null; tracking: string | null; error: string | null; lines?: number[] };
+type Order = { id: string; lines: MerchLine[]; notes: string; status: string; createdAt: string; userName?: string; jobs?: Job[] };
 
-const STATUS_WORD: Record<string, string> = { new: "With James", ordered: "Ordered", ready: "Ready to Collect", collected: "Collected" };
+const NO_ADDRESS: MerchDelivery = { name: "", line1: "", line2: "", town: "", postcode: "", phone: "" };
+
+const STATUS_WORD: Record<string, string> = {
+  new: "With James",
+  ordered: "Being Made",
+  dispatched: "On Its Way",
+  delivered: "Delivered",
+  ready: "Ready to Collect",
+  collected: "Collected",
+  cancelled: "Cancelled",
+};
 
 const Arrow = ({ left = false }: { left?: boolean }) => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -47,6 +58,8 @@ export default function MerchStore() {
   const [basket, setBasket] = useState<MerchLine[]>([]);
   const [sheet, setSheet] = useState<null | "basket" | "orders">(null);
   const [notes, setNotes] = useState("");
+  const [delivery, setDelivery] = useState<MerchDelivery>(NO_ADDRESS);
+  const deliveryTouched = useRef(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [placed, setPlaced] = useState<Order | null>(null);
@@ -119,10 +132,12 @@ export default function MerchStore() {
     setOrdersError(null);
     fetch("/api/merch/orders", { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; orders?: Order[]; owner?: boolean; error?: string }) => {
+      .then((j: { ok?: boolean; orders?: Order[]; owner?: boolean; lastDelivery?: MerchDelivery | null; error?: string }) => {
         if (!j.ok) throw new Error(j.error || "Could not read your orders.");
         setOrders(j.orders ?? []);
         setOwner(Boolean(j.owner));
+        /* Last time's address, unless they have started typing a new one. */
+        if (j.lastDelivery && !deliveryTouched.current) setDelivery({ ...NO_ADDRESS, ...j.lastDelivery });
       })
       .catch((e: Error) => setOrdersError(e.message || "Could not read your orders."));
   }, []);
@@ -152,7 +167,7 @@ export default function MerchStore() {
       const r = await fetch("/api/merch/orders", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ lines: basket, notes }),
+        body: JSON.stringify({ lines: basket, notes, delivery }),
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; order?: Order; error?: string };
       if (!r.ok || !j.ok || !j.order) throw new Error(j.error || "That didn't go through. Try again.");
@@ -333,11 +348,11 @@ export default function MerchStore() {
           </div>
           <div>
             <h3>Send It</h3>
-            <p>Your order goes straight to James. Nothing is paid on this page.</p>
+            <p>Your order goes to James, who sends it to be made. Nothing is paid on this page.</p>
           </div>
           <div>
             <h3>Wear It</h3>
-            <p>You will see it move from With James to Ready to Collect under Your Orders.</p>
+            <p>It comes to your door. Follow it from With James to On Its Way under Your Orders.</p>
           </div>
         </div>
       </section>
@@ -365,7 +380,7 @@ export default function MerchStore() {
             {placed ? (
               <div className="m-done">
                 <h3>Order Placed</h3>
-                <p>James has it. You can see where it is under Your Orders.</p>
+                <p>James has it. Once it is on its way, the tracking link shows under Your Orders.</p>
                 <ul className="m-lines is-plain">
                   {placed.lines.map((l, i) => (
                     <li key={i}>
@@ -419,11 +434,41 @@ export default function MerchStore() {
                     );
                   })}
                 </ul>
+                <fieldset className="m-deliver">
+                  <legend>Deliver To</legend>
+                  {(
+                    [
+                      ["name", "Name", "name", true],
+                      ["line1", "Address", "address-line1", true],
+                      ["line2", "Address line 2", "address-line2", false],
+                      ["town", "Town", "address-level2", true],
+                      ["postcode", "Postcode", "postal-code", true],
+                      ["phone", "Mobile, for the courier", "tel", false],
+                    ] as const
+                  ).map(([k, label, auto, need]) => (
+                    <label key={k} className={`m-field is-${k}`}>
+                      <span>
+                        {label}
+                        {!need && <i> (optional)</i>}
+                      </span>
+                      <input
+                        value={delivery[k]}
+                        autoComplete={auto}
+                        inputMode={k === "phone" ? "tel" : undefined}
+                        maxLength={k === "postcode" ? 10 : k === "phone" ? 20 : 100}
+                        onChange={(e) => {
+                          deliveryTouched.current = true;
+                          setDelivery((d) => ({ ...d, [k]: e.target.value }));
+                        }}
+                      />
+                    </label>
+                  ))}
+                </fieldset>
                 <label className="m-notes">
                   <span>Anything James should know</span>
                   <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={600} placeholder="A name on the back, a different fit, who it is for" />
                 </label>
-                <p className="m-fine">No payment is taken here. James will be in touch about the cost before anything is ordered.</p>
+                <p className="m-fine">No payment is taken here. James checks every order before it goes to be made.</p>
                 {error && <p className="m-error">{error}</p>}
                 <button type="button" className="m-add is-dark" onClick={place} disabled={sending}>
                   {sending ? (
@@ -474,6 +519,27 @@ export default function MerchStore() {
                         {l.qty} x {l.name} <span>{l.colour}, {l.size}</span>
                       </p>
                     ))}
+                    {(() => {
+                      /* One link per parcel; two makers can share a courier's page. */
+                      const sent = (o.jobs ?? []).filter((j) => j.tracking && !j.error);
+                      const seen = new Set<string>();
+                      const links = sent.filter((j) => !seen.has(j.tracking!) && seen.add(j.tracking!));
+                      if (links.length === 0) return null;
+                      return (
+                        <div className="m-tracks">
+                          {links.map((j) => {
+                            const what = links.length > 1 ? (j.lines ?? []).map((i) => o.lines[i]?.name).filter(Boolean).join(" and ") : "";
+                            return (
+                              <a key={j.tracking!} className="m-track" href={j.tracking!} target="_blank" rel="noopener noreferrer">
+                                Track {what || "it"}
+                                {j.carrier ? ` with ${j.carrier}` : ""}
+                                <Arrow />
+                              </a>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </li>
                 ))}
               </ul>

@@ -5302,6 +5302,9 @@ CREATE TABLE IF NOT EXISTS os_merch_orders (
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS os_merch_orders_user ON os_merch_orders (user_id, created_at DESC);
+/* Where it goes, and each maker's part once James sends it (lib/merch-makers, 25 Nov 2026). */
+ALTER TABLE os_merch_orders ADD COLUMN IF NOT EXISTS delivery JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE os_merch_orders ADD COLUMN IF NOT EXISTS maker_jobs JSONB NOT NULL DEFAULT '[]';
 
 `;
 
