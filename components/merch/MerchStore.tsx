@@ -455,7 +455,7 @@ export default function MerchStore() {
                         value={delivery[k]}
                         autoComplete={auto}
                         inputMode={k === "phone" ? "tel" : undefined}
-                        maxLength={k === "postcode" ? 10 : k === "phone" ? 20 : 100}
+                        maxLength={k === "postcode" ? 10 : k === "phone" ? 20 : k === "line1" || k === "line2" ? 35 : k === "town" ? 50 : 60}
                         onChange={(e) => {
                           deliveryTouched.current = true;
                           setDelivery((d) => ({ ...d, [k]: e.target.value }));
@@ -466,7 +466,7 @@ export default function MerchStore() {
                 </fieldset>
                 <label className="m-notes">
                   <span>Anything James should know</span>
-                  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={600} placeholder="A name on the back, a different fit, who it is for" />
+                  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={600} placeholder="A different size or fit, or who it is for" />
                 </label>
                 <p className="m-fine">No payment is taken here. James checks every order before it goes to be made.</p>
                 {error && <p className="m-error">{error}</p>}

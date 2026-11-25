@@ -7,9 +7,9 @@ import type { MerchDelivery, MerchLine } from "@/lib/merch-catalogue";
 
 /**
  * Every merch order, newest first, for the owners to work through (lib/merch).
- * Send to Maker passes each part to its maker (Clothes2Order the clothing,
- * Prodigi the mugs); the daily check then moves it along to On Its Way, and the
- * person who ordered sees the same words and the tracking link in the shop.
+ * Send to Maker passes the order to Gelato; Gelato's own calls and the daily
+ * check then move it along to On Its Way, and the person who ordered sees the
+ * same words and the tracking link in the shop.
  */
 
 type Job = {
@@ -53,7 +53,7 @@ const STATUSES = [
   { id: "cancelled", label: "Cancelled" },
 ];
 
-const MAKER: Record<string, string> = { c2o: "Clothes2Order", prodigi: "Prodigi" };
+const MAKER: Record<string, string> = { gelato: "Gelato" };
 const STAGE: Record<string, string> = {
   sent: "Sent",
   making: "Being made",
@@ -63,7 +63,7 @@ const STAGE: Record<string, string> = {
   cancelled: "Cancelled",
   failed: "Failed",
 };
-const MODE: Record<Job["mode"], string> = { standin: "Stand-in", test: "Test", live: "Live" };
+const MODE: Record<Job["mode"], string> = { standin: "Stand-in", test: "Test draft", live: "Live" };
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -187,12 +187,12 @@ export default function MerchOrders() {
                               <b className="font-semibold text-ink">{MAKER[j.maker] ?? j.maker}</b>
                               {j.mode !== "live" && <span className="bg-[var(--warn-soft,#f7ece9)] px-1.5 py-px text-[11px] text-[#A85A51]">{MODE[j.mode]}</span>}
                               <span className="text-muted">{j.error ? "Not sent" : STAGE[j.stage] ?? j.stage}</span>
-                              {j.makerRef && <span className="text-muted">· {j.makerRef}</span>}
-                              {j.cost && <span className="text-muted">· £{j.cost}</span>}
+                              {j.makerRef && <span className="text-muted" title={j.makerRef}>· {j.makerRef.split(",").map((r) => r.slice(0, 8)).join(", ")}</span>}
+                              {j.cost && <span className="text-muted">· {j.cost}</span>}
                             </p>
                             {j.error && <p className="mt-1 text-[#7d3a32]">{j.error}</p>}
                             {j.said && !j.error && <p className="mt-1 text-muted">{j.said}</p>}
-                            {j.dispatchBy && <p className="mt-1 text-muted">Due out {j.dispatchBy}</p>}
+                            {j.dispatchBy && <p className="mt-1 text-muted">Due by {new Date(j.dispatchBy).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</p>}
                             {j.issues.map((x, i) => (
                               <p key={i} className="mt-1 text-[#7d3a32]">
                                 {x}

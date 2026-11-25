@@ -501,6 +501,9 @@ const MACHINE_ROUTES = [
   "/api/sms/inbound",
   "/api/maintenance/snapshot",        // the maintenance board's figures, daily
   "/api/merch/makers/check",          // merch orders: ask the makers how each is going, daily
+  /* Gelato calls here when a merch order moves; ?key= must match GELATO_WEBHOOK_KEY,
+     and the call is only a nudge to ask Gelato itself. */
+  "/api/merch/makers/gelato",
   "/api/radar/run",                   // Landlord Radar: sweep the patch, rescore, digest
   "/api/bond/company-sync",           // Bond: read the Land Registry company files, monthly
   "/api/bond/sales-sync",             // Bond: read the Land Registry price-paid file, monthly

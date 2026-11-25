@@ -14,10 +14,10 @@ import type { OsUser } from "@/lib/users";
  * An order is a list of lines, a note and where it goes. Nothing is paid on
  * the page and no price is stored (pricing and who pays are James's calls).
  * James is emailed each one. On the Orders page he presses Send to Maker, and
- * each maker gets its own part (lib/merch-makers): Clothes2Order the clothing,
- * Prodigi the mugs. Once a day the OS asks each maker how its part is doing
- * (checkOpenOrders), and the person who ordered sees "On Its Way" and the
- * courier's tracking link under Your Orders.
+ * the order goes to Gelato (lib/merch-makers). Gelato calls us when it moves
+ * (checkFromMaker), the OS asks once a day as well (checkOpenOrders), and the
+ * person who ordered sees "On Its Way" and the courier's tracking link under
+ * Your Orders.
  */
 
 export const MERCH_ORDERS_TO = "james@therecruitmentexperts.co.uk";
@@ -111,7 +111,8 @@ const POSTCODE = /^[A-Z]{1,2}[0-9][0-9A-Z]?\s?[0-9][A-Z]{2}$/i;
 export function cleanDelivery(raw: unknown): MerchDelivery | string {
   const d = (raw ?? {}) as Record<string, unknown>;
   const t = (k: string, max = 100) => String(d[k] ?? "").replace(/\s+/g, " ").trim().slice(0, max);
-  const out: MerchDelivery = { name: t("name"), line1: t("line1"), line2: t("line2"), town: t("town", 50), postcode: t("postcode", 10).toUpperCase(), phone: t("phone", 20) };
+  /* Gelato takes 35 characters an address line. */
+  const out: MerchDelivery = { name: t("name", 60), line1: t("line1", 35), line2: t("line2", 35), town: t("town", 50), postcode: t("postcode", 10).toUpperCase(), phone: t("phone", 20) };
   if (!out.name) return "Who is it for? Add a name for the delivery.";
   if (!out.line1) return "Add the first line of the delivery address.";
   if (!out.town) return "Add the town for the delivery.";
@@ -314,8 +315,22 @@ export async function checkOrder(id: string): Promise<{ order: MerchOrder; error
 }
 
 /**
- * The daily run: every order with a maker's part still being made. Clothes2Order
- * asks for once a day after its 8pm dispatch, and not again once dispatched.
+ * Gelato has said an order moved. Its call carries no signature, so it is only
+ * a nudge: the order is looked up by our own reference and Gelato is asked.
+ */
+export async function checkFromMaker(ref: string): Promise<boolean> {
+  const id = ref.replace(/-gelato$/, "");
+  if (!/^mo_[A-Za-z0-9_-]+$/.test(id)) return false;
+  const o = await orderById(id);
+  if (!o || o.status !== "ordered") return false;
+  await checkJobs(o);
+  return true;
+}
+
+/**
+ * The daily run: every order with a maker's part still being made. It catches
+ * anything Gelato's calls missed; an order that has gone out is not asked about
+ * again.
  */
 export async function checkOpenOrders(): Promise<{ checked: number; changed: number; errors: string[] }> {
   const rows = await q<Row>(`SELECT * FROM os_merch_orders WHERE status = 'ordered' ORDER BY created_at LIMIT 200`);

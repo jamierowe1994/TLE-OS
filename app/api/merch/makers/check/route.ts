@@ -6,10 +6,10 @@ import { checkOpenOrders } from "@/lib/merch";
 /**
  * POST /api/merch/makers/check   (x-cron-key: CRON_SECRET, or an owner)
  *
- * Asks Clothes2Order and Prodigi how each merch order still being made is
- * doing, once a day in the early morning run (Clothes2Order dispatches by 8pm
- * and asks for no more than a check a day). Orders that have gone out are
- * never asked about again. Nothing is sent anywhere by this.
+ * Asks Gelato how each merch order still being made is doing, once a day in
+ * the early morning run, in case one of Gelato's own calls was missed. Orders
+ * that have gone out are never asked about again. Nothing is sent anywhere by
+ * this.
  */
 
 export const dynamic = "force-dynamic";
