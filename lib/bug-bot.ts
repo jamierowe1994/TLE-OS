@@ -41,7 +41,11 @@ import { isInternalAddress } from "@/lib/email-policy";
 
 /* with_claude (4 Nov 2026): handed to a Claude Code session by Send to Claude
    (lib/claude-tickets); it reports back as fix_ready, needs_you or not_a_bug. */
-export type BotState = "" | "looking" | "to_fix" | "fix_ready" | "needs_you" | "not_a_bug" | "with_claude";
+/* steve_answered (25 Nov 2026): a how-do-I Steve answered in the reporter's
+   chat by himself (lib/ticket-sort). Set only there, so it is not one the bot
+   or Claude may record: it stays out of BOT_STATES. Off the bot's queue (it
+   takes '' only), off the bell's new tickets, still open on Tickets. */
+export type BotState = "" | "looking" | "to_fix" | "fix_ready" | "needs_you" | "not_a_bug" | "with_claude" | "steve_answered";
 export const BOT_STATES: BotState[] = ["", "looking", "to_fix", "fix_ready", "needs_you", "not_a_bug", "with_claude"];
 
 /** A run that died mid-bug leaves it "looking"; after this long it goes back on the queue. */

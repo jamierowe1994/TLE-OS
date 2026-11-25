@@ -499,6 +499,10 @@ const MAX_TOOL_ROUNDS = 6;
 
 /** Where the caller is and what they have open, so "this property" resolves. */
 export interface AskContext {
+  /** Answer only (lib/ticket-sort, 25 Nov 2026): every tool that saves,
+   *  proposes, opens or presses anything is refused, so an answer written
+   *  for a ticket can only ever have looked things up. */
+  readOnly?: boolean;
   scope: Scope;
   path: string | null;
   openListingId: string | null;
@@ -670,6 +674,12 @@ function describe(s: OpenSurface): string {
  * Streaming is still not worth it: the visible reply is two or three sentences
  * and the wait is the lookups, which the step labels already narrate.
  */
+/* The tools that only look things up. Anything else (propose_*, learn_this,
+   note_a_gap, remember_about_them, jobs, opening or pressing on screen) is
+   refused when an answer is read only. An allowlist, so a new tool is refused
+   until somebody decides it only reads. */
+const READ_ONLY_TOOLS = /^(find_property|property_detail|property_contacts|compliance_due|portal_links|my_properties|listing_viewings|listing_applications|listing_marketing|property_jobs|appraisal_next_step|find_file|search_everything|my_day|let_push_check|rent_status|listing_portal_stats|home_record|rtr_on_let|find_passport)$/;
+
 export async function ask(
   history: Turn[],
   question: string,
@@ -851,7 +861,9 @@ export async function ask(
     for (const call of calls) {
       const input = (call.input ?? {}) as Record<string, unknown>;
       steps.push(labelFor(call.name, input));
-      const out = await runTool(call.name, input, {
+      const out = ctx.readOnly && !READ_ONLY_TOOLS.test(call.name)
+        ? { error: "Not here: this answer is read only. Say what to do in words instead." }
+        : await runTool(call.name, input, {
         scope: ctx.scope,
         path: ctx.path,
         openListingId: ctx.openListingId,

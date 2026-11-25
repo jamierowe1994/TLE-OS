@@ -631,7 +631,7 @@ export default function Viewings() {
                 {listTitle}
                 <span className="figures ml-2 text-[14px] text-muted">{listRows.length}</span>
               </h2>
-              <button type="button" onClick={() => setMaking(true)} className={`ml-auto whitespace-nowrap ${secondary}`}>
+              <button type="button" data-steve="viewings.new-appointment" onClick={() => setMaking(true)} className={`ml-auto whitespace-nowrap ${secondary}`}>
                 <DoodleIcon name="clock" size={13} />
                 New appointment
               </button>

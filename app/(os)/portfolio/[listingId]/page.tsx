@@ -1256,8 +1256,8 @@ export default function PropertyPage() {
        is in, Inspections leads with the check-out. Every one opens the same
        pop-up as the head and the menu. */
     const ic = (name: string) => <DoodleIcon name={name} size={15} />;
-    const btn = (label: string, icon: string, onClick: () => void, o: { primary?: boolean; disabled?: boolean; title?: string } = {}) => (
-      <button type="button" disabled={o.disabled} onClick={onClick} title={o.title} className={`nl-btn ${o.primary ? "nl-btn--primary" : "nl-btn--secondary"}`}>
+    const btn = (label: string, icon: string, onClick: () => void, o: { primary?: boolean; disabled?: boolean; title?: string; steve?: string } = {}) => (
+      <button type="button" disabled={o.disabled} onClick={onClick} title={o.title} className={`nl-btn ${o.primary ? "nl-btn--primary" : "nl-btn--secondary"}`} data-steve={o.steve}>
         {ic(icon)} {label}
       </button>
     );
@@ -1281,7 +1281,7 @@ export default function PropertyPage() {
         sub: standing.find((s) => s.id === "compliance")?.text,
         acts: (
           <>
-            {btn("Email Docs", "mail", () => setSendOpen({ start: null, heading: "Email Docs" }), { disabled: p.test, title: "To the tenants, the landlord or both, from you, kept on the record" })}
+            {btn("Email Docs", "mail", () => setSendOpen({ start: null, heading: "Email Docs" }), { disabled: p.test, title: "To the tenants, the landlord or both, from you, kept on the record", steve: "home.email-docs" })}
             {btn("Email the Team", "mail", () => setTeamOpen(true), { disabled: p.test, title: "The agent, compliance or anyone here, the thread kept on the record" })}
             {btn("Add a certificate", "upload", certButton, { disabled: !propertyId, title: "Read and filed on the home" })}
             {btn("Plan a certificate", "calendar", () => act({ kind: "planned" }), { primary: true, disabled: !canAct, title: "A gas safety, EICR or service, by a date" })}
@@ -1307,7 +1307,7 @@ export default function PropertyPage() {
           <>
             {btn("Record a past visit", "checklist", () => act({ kind: "past-visit" }), { disabled: !canAct || visits.state !== "ready", title: "Already done elsewhere. No emails" })}
             {btn("Book an inspection", "calendar", () => void bookVisit(), { primary: !(canAct && noticeIn), disabled: !canAct || visits.state !== "ready", title: "A property visit: the home and the tenant" })}
-            {canAct && noticeIn && btn("Book the check-out", "logout", () => void bookCheckout(), { primary: true, disabled: visits.state !== "ready", title: leaving?.moveOutOn ? `They leave ${day(leaving.moveOutOn)}` : "Notice is in" })}
+            {canAct && noticeIn && btn("Book the check-out", "logout", () => void bookCheckout(), { primary: true, disabled: visits.state !== "ready", title: leaving?.moveOutOn ? `They leave ${day(leaving.moveOutOn)}` : "Notice is in", steve: "home.book-checkout" })}
           </>
         ),
       },
@@ -1320,7 +1320,7 @@ export default function PropertyPage() {
         sub: "Inventories, agreements and anything else that isn't a certificate, and every job's invoices and quotes",
         acts: (
           <>
-            {btn("Email Docs", "mail", () => setSendOpen({ start: null, heading: "Email Docs" }), { disabled: p.test, title: "To the tenants, the landlord or both, from you, kept on the record" })}
+            {btn("Email Docs", "mail", () => setSendOpen({ start: null, heading: "Email Docs" }), { disabled: p.test, title: "To the tenants, the landlord or both, from you, kept on the record", steve: "home.email-docs" })}
             {btn("Add a document", "upload", docPicker, { primary: true, disabled: p.test })}
           </>
         ),
@@ -1390,7 +1390,7 @@ export default function PropertyPage() {
                   text={(label, what) => <span title={what}>{label}</span>}
                 />
                 {canAct && noticeIn && (
-                  <button type="button" disabled={visits.state !== "ready"} onClick={() => void bookCheckout()} className="nl-btn nl-btn--secondary" title={leaving?.moveOutOn ? `They leave ${day(leaving.moveOutOn)}` : "Notice is in"}>
+                  <button type="button" disabled={visits.state !== "ready"} onClick={() => void bookCheckout()} className="nl-btn nl-btn--secondary" title={leaving?.moveOutOn ? `They leave ${day(leaving.moveOutOn)}` : "Notice is in"} data-steve="home.book-checkout">
                     <Ico name="calendar" /> Book the check-out
                   </button>
                 )}
@@ -1399,7 +1399,7 @@ export default function PropertyPage() {
                 {/* Email at the top, so it is in reach from every tab (Sean McMahon,
                     29 Oct 2026: "if you open a maintenance screen ... you lose that
                     facility"). The Email Docs sheet with nothing ticked. */}
-                <button type="button" disabled={p.test} onClick={() => setEmailPick(true)} className="nl-btn nl-btn--secondary" title="Email, Email Docs, Email the Team or Send out logins">
+                <button type="button" disabled={p.test} onClick={() => setEmailPick(true)} className="nl-btn nl-btn--secondary" title="Email, Email Docs, Email the Team or Send out logins" data-steve="home.email">
                   <Ico name="mail" /> Email
                 </button>
                 <button type="button" disabled={!canAct} onClick={() => act({ kind: "planned" })} className="nl-btn nl-btn--secondary" title="A gas safety, EICR or service, by a date">
@@ -2032,12 +2032,12 @@ export default function PropertyPage() {
                 <button type="button" disabled={p.test || !loginListings.length} onClick={() => setShowLogins(true)} className={tile}>{tileIcon("mail")}{tileText("Send out logins", "Tenant account, to report repairs")}</button>
                 {/* Josel, 20 Oct 2026: certificates and documents to the tenants, from here.
                     James, 29 Oct 2026: Email Docs, to the tenants, the landlord or both. */}
-                <button type="button" disabled={p.test} onClick={() => setSendOpen({ start: null, heading: "Email Docs" })} className={tile}>{tileIcon("mail")}{tileText("Email Docs", "To the tenants, the landlord or both")}</button>
+                <button type="button" disabled={p.test} onClick={() => setSendOpen({ start: null, heading: "Email Docs" })} className={tile} data-steve="home.email-docs">{tileIcon("mail")}{tileText("Email Docs", "To the tenants, the landlord or both")}</button>
                 <button type="button" disabled={!propertyId} onClick={() => { pickTab("compliance"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("shield")}{tileText("Add a certificate", "Read and filed on the home")}</button>
                 <button type="button" disabled={p.test} onClick={() => { pickTab("documents"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("folder")}{tileText("Add a document", "An inventory, an agreement, anything else")}</button>
                 <button type="button" disabled={!propertyId} onClick={() => { pickTab("notes"); setTimeout(() => { document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }); document.getElementById("home-note")?.focus({ preventScroll: true }); }, 60); }} className={tile}>{tileIcon("note")}{tileText("Add a note", "A call, an email, a query")}</button>
                 {canAct && noticeIn ? (
-                  <button type="button" disabled={visits.state !== "ready"} onClick={() => void bookCheckout()} className={tile}>{tileIcon("key")}{tileText("Book the check-out", leaving?.moveOutOn ? `They leave ${day(leaving.moveOutOn)}` : "Notice is in")}</button>
+                  <button type="button" disabled={visits.state !== "ready"} onClick={() => void bookCheckout()} className={tile} data-steve="home.book-checkout">{tileIcon("key")}{tileText("Book the check-out", leaving?.moveOutOn ? `They leave ${day(leaving.moveOutOn)}` : "Notice is in")}</button>
                 ) : null}
                 {canAct && p.onRex !== false && mayRelet ? (
                   <div className="relative">

@@ -82,7 +82,7 @@ export type MenuItem =
   | "rule";
 
 /** The three-dot menu: everything that is not one of the page's two jobs. */
-export function Menu({ items, label = "More options" }: { items: MenuItem[]; label?: string }) {
+export function Menu({ items, label = "More options", steve }: { items: MenuItem[]; label?: string; /** Steve's handle on the three dots (lib/steve-guide). */ steve?: string }) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -100,7 +100,7 @@ export function Menu({ items, label = "More options" }: { items: MenuItem[]; lab
   }, [open]);
   return (
     <div ref={wrap} className="nl-menu-wrap">
-      <button type="button" className="nl-iconbtn" aria-label={label} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className="nl-iconbtn" aria-label={label} aria-expanded={open} onClick={() => setOpen((o) => !o)} data-steve={steve}>
         <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden fill="currentColor">
           <circle cx="5" cy="12" r="1.7" />
           <circle cx="12" cy="12" r="1.7" />

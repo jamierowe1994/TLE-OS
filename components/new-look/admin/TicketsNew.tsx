@@ -118,6 +118,20 @@ const claudeDo = (b: Bug): ClaudeDo | null => {
 };
 const doHref = (d: ClaudeDo) => (d.point ? `${d.path}${d.path.includes("?") ? "&" : "?"}steve=point:${d.point}` : d.path);
 
+/* What the sorter did with it (lib/ticket-sort, switch "ticketsort", 25 Nov
+   2026): a plain label, and the few words of why for the ones left for James. */
+const ctxText = (b: Bug, k: string) => (typeof b.context?.[k] === "string" ? (b.context[k] as string) : "");
+const sorted = (b: Bug): { label: string; why: string } | null => {
+  const sort = ctxText(b, "sort");
+  if (!sort) return null;
+  const why = ctxText(b, "sortWhy");
+  if (b.botState === "steve_answered") return { label: "Steve Answered", why: "" };
+  if (ctxText(b, "sortSentAt") && !ctxText(b, "sortSendError")) return { label: "Sent to Claude by Itself", why: "" };
+  if (sort === "find" && ctxText(b, "sortPointedAt")) return { label: "Pointed to Find It", why: "" };
+  const held = ctxText(b, "sortSendError") ? `Claude didn't take it: ${ctxText(b, "sortSendError")}` : ctxText(b, "sortHeld") || ctxText(b, "sortError");
+  return { label: "Left for You", why: [why, held].filter(Boolean).join(". ") };
+};
+
 /** "kirstie.mulholland@…" to "Kirstie", for "Kirstie is told when it does". */
 const firstName = (email: string) => {
   const w = (email.split("@")[0] ?? "").split(/[._-]/)[0] ?? "";
@@ -203,6 +217,8 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
   const claudeReply = (b: Bug) =>
     typeof b.context?.claudeReply === "string" && !b.context?.replySentAt ? (b.context.claudeReply as string) : "";
   const theirs = (b: Bug) => (media[b.id] ?? []).filter((m) => m.source !== "claude");
+  /* Steve answered a how-do-I by himself (lib/ticket-sort). */
+  const steveAnswered = (b: Bug) => open(b) && b.botState === "steve_answered";
 
   /* What Claude did, read here instead of in its session (James, 4 Nov 2026:
      "it almost kind of bypasses the need to go into Claude if I don't need
@@ -329,9 +345,23 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
                 : `${b.kind}, ${b.reporterEmail || "unknown"} on ${b.path || "an unknown screen"}`}
               {b.media ? `, ${b.media} attached` : ""}
             </span>
+            {sorted(b) && (
+              <Badge tone={sorted(b)!.label === "Left for You" ? "neutral" : "info"} bare title={sorted(b)!.why || undefined}>
+                {sorted(b)!.label}
+              </Badge>
+            )}
           </div>
           <p className="nl-adm-quote">{nd(b.body)}</p>
-          {backFromClaude(b) ? (
+          {sorted(b)?.why && <p className="nl-meta">{nd(`The sorter left it for you: ${sorted(b)!.why}.`)}</p>}
+          {b.botState === "steve_answered" ? (
+            <div className="nl-adm-claude">
+              <p className="nl-meta">
+                {firstName(b.reporterEmail) ? `Steve's answer, left in ${firstName(b.reporterEmail)}'s chat` : "Steve's answer, left in their chat"}
+                {b.botAt ? `, ${when(b.botAt)}` : ""}
+              </p>
+              <p className="nl-adm-quote">{nd(ctxText(b, "steveAnswer").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1"))}</p>
+            </div>
+          ) : backFromClaude(b) ? (
             report(b)
           ) : b.botState && (
             <p className={`nl-meta${b.botState === "needs_you" ? " nl-adm-warn" : ""}`}>
@@ -353,7 +383,7 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
                 disabled={!claude.ready || claudeSaid[b.id] === "Sending…"}
                 title={claude.ready ? "A Claude Code session on your plan works this ticket and comes back with a fix to push, a question or an answer" : "Not connected yet: the routine's address and key go on Railway"}
                 onClick={() => void sendToClaude(b.id)}
-                className={`nl-btn nl-btn--sm ${b.claudeUrl ? "nl-btn--quiet" : "nl-btn--primary"}`}
+                className={`nl-btn nl-btn--sm ${b.claudeUrl ? "nl-btn--quiet" : steveAnswered(b) ? "nl-btn--secondary" : "nl-btn--primary"}`}
               >
                 {claudeSaid[b.id] === "Sending…" ? "Sending…" : b.claudeUrl ? "Send to Claude Again" : "Send to Claude"}
               </button>
@@ -367,6 +397,16 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
               <a href={b.botPr} target="_blank" rel="noreferrer" className="nl-btn nl-btn--secondary nl-btn--sm">
                 See the Change
               </a>
+            )}
+            {steveAnswered(b) && (
+              <button
+                type="button"
+                title="Closes it as fixed without another email or message: Steve's answer already reached them"
+                onClick={() => void patch(b.id, { state: "fixed", quiet: true })}
+                className="nl-btn nl-btn--primary nl-btn--sm"
+              >
+                That Sorted It
+              </button>
             )}
             {claudeReply(b) && (
               <button type="button" onClick={() => void patch(b.id, { sendReply: true })} className="nl-btn nl-btn--primary nl-btn--sm">
@@ -501,7 +541,7 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
      important"). Anything Claude, or the old bot, has answered goes in its own
      section under them, and can be folded away; anything still with Claude
      waits at the bottom. Later is its own list, soonest first. */
-  const answered = (b: Bug) => open(b) && (backFromClaude(b) || ["fix_ready", "needs_you", "not_a_bug", "to_fix"].includes(b.botState ?? ""));
+  const answered = (b: Bug) => open(b) && (backFromClaude(b) || steveAnswered(b) || ["fix_ready", "needs_you", "not_a_bug", "to_fix"].includes(b.botState ?? ""));
   const listed = [...pick(people), ...pick(auto)];
   const ready = show === "open" ? listed.filter((b) => answered(b) && !withClaude(b)) : [];
   const working = show === "open" ? listed.filter(withClaude) : [];
@@ -511,6 +551,9 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
   const later = show === "later" ? [...listed].sort((a, b) => (reviewAtOf(a) ?? "").localeCompare(reviewAtOf(b) ?? "")) : [];
   /* A link to one answered ticket (?open=) opens the section it is in. */
   const showReady = !folded || ready.some((b) => b.id === openId);
+  /* Steve's own answers sit in the same section, named for who answered. */
+  const bySteve = ready.filter(steveAnswered).length;
+  const readyTitle = bySteve === 0 ? "Answered by Claude" : bySteve === ready.length ? "Answered by Steve" : "Answered by Claude and Steve";
 
   return (
     <Tab>
@@ -566,7 +609,7 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
 
           {ready.length > 0 && (
             <Section
-              title={<>Answered by Claude <span className="nl-count">{ready.length}</span></>}
+              title={<>{readyTitle} <span className="nl-count">{ready.length}</span></>}
               aside={
                 <button type="button" className="nl-link" aria-expanded={showReady} onClick={() => fold(showReady)}>
                   {showReady ? "Hide" : "Show"}

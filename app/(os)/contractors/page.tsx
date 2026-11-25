@@ -304,8 +304,8 @@ export default function ContractorsPage() {
           </div>
           <div className="nl-ct-acts">
             <button type="button" className="nl-btn nl-btn--primary" disabled={!data} onClick={() => setSending("choose")}><SendIco /> Send a contractor</button>
-            <button type="button" className="nl-btn nl-fs-ghost" onClick={() => setEditing({ ...BLANK_CONTRACTOR })}><Ico name="plus" /> Add one</button>
-            <button type="button" className="nl-btn nl-fs-ghost" disabled={!data} onClick={() => { setLogged(null); setRaising(true); }}><Ico name="upload" /> Log an invoice</button>
+            <button type="button" className="nl-btn nl-fs-ghost" onClick={() => setEditing({ ...BLANK_CONTRACTOR })} data-steve="contractors.add"><Ico name="plus" /> Add one</button>
+            <button type="button" className="nl-btn nl-fs-ghost" disabled={!data} onClick={() => { setLogged(null); setRaising(true); }} data-steve="contractors.log-invoice"><Ico name="upload" /> Log an invoice</button>
           </div>
         </header>
 
@@ -606,11 +606,11 @@ export default function ContractorsPage() {
         blurb="Your contractors, bookings and invoices: who's out today, what's scheduled and what needs attention."
         actions={
           <div className="flex flex-wrap gap-2">
-            <PressButton onClick={() => { setTab("book"); setEditing({ ...BLANK_CONTRACTOR }); }} className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-page">
+            <PressButton data-steve="contractors.add" onClick={() => { setTab("book"); setEditing({ ...BLANK_CONTRACTOR }); }} className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-page">
               <DoodleIcon name="user" size={14} />Add a contractor
             </PressButton>
             {/* James, 21 Oct 2026: straight to the invoice, without opening the contractor first. */}
-            <PressButton onClick={() => { setLogged(null); setRaising(true); }} disabled={!data} className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-line/80 bg-white px-5 py-2.5 text-[13px] font-semibold">
+            <PressButton data-steve="contractors.log-invoice" onClick={() => { setLogged(null); setRaising(true); }} disabled={!data} className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-line/80 bg-white px-5 py-2.5 text-[13px] font-semibold">
               <DoodleIcon name="doc" size={14} />Log an invoice
             </PressButton>
           </div>

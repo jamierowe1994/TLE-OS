@@ -249,7 +249,7 @@ export default function SendToTenants({
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-[150] flex items-start justify-center overflow-y-auto p-3 sm:items-center sm:p-4">
       <button type="button" aria-label="Close" onClick={() => !sending && onClose()} className="fixed inset-0 cursor-default bg-ink/55 backdrop-blur-[3px]" />
-      <div className="fade-up relative w-full max-w-[760px] rounded-2xl border border-line/70 bg-page p-5 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.45)] sm:p-8">
+      <div className="fade-up relative w-full max-w-[760px] rounded-2xl border border-line/70 bg-page p-5 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.45)] sm:p-8" data-steve="home.send-sheet">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-[22px] font-normal leading-tight">{heading}</h2>

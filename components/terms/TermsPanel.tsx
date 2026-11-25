@@ -274,7 +274,7 @@ function OnPagePanel({
           </span>
         ) : !live ? (
           <span className="flex shrink-0 items-center gap-2">
-            <button type="button" className="nl-btn nl-btn--primary" onClick={() => setScreen({ mode: "new" })}>
+            <button type="button" className="nl-btn nl-btn--primary" onClick={() => setScreen({ mode: "new" })} data-steve="terms.open-send">
               <Ico name="arrow" size={15} /> Send Terms of Business
             </button>
             {more}

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { asText, jsonObject } from "@/lib/json-body";
 import { whoIs } from "@/lib/admin";
 import { requireOwner } from "@/lib/admin";
@@ -24,7 +24,8 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  const { actor, subject, viewingAs } = await whoIs(req);
+  const who = await whoIs(req);
+  const { actor, subject, viewingAs } = who;
   if (!actor) return NextResponse.json({ ok: false, error: "Not signed in." }, { status: 401 });
 
   const raw = await jsonObject(req);
@@ -65,6 +66,23 @@ export async function POST(req: NextRequest) {
         ? b.shot
         : null,
   });
+  /* Tickets sort themselves (lib/ticket-sort, behind "ticketsort"): after the
+     answer has gone, never in the reporter's way, and never thrown at them.
+     Steve answers as them, so their own book is read from this request. */
+  if (id && b.kind !== "auto") {
+    const origin = publicOrigin(req);
+    const reporter = { id: actor.id, email: actor.email, name: actor.name ?? null, role: actor.role };
+    const ticket = { id, body: b.body.trim(), path: b.path, kind: b.kind || "bug", context: b.context };
+    after(async () => {
+      try {
+        const { sortNewTicket } = await import("@/lib/ticket-sort");
+        const { bookScope } = await import("@/lib/scope");
+        await sortNewTicket(ticket, reporter, await bookScope(req, who), origin);
+      } catch (e) {
+        console.error("[ticket-sort]", id, e instanceof Error ? e.message : e);
+      }
+    });
+  }
   return NextResponse.json({ ok: true, id });
 }
 
@@ -113,7 +131,7 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   if (!(await requireOwner(req))) return new NextResponse(null, { status: 404 });
-  const { id, state, priority, sendReply, story, reviewAt } = (await req.json().catch(() => ({}))) as { id?: string; state?: string; priority?: string | null; sendReply?: boolean; story?: string; reviewAt?: string | null };
+  const { id, state, priority, sendReply, story, reviewAt, quiet } = (await req.json().catch(() => ({}))) as { id?: string; state?: string; priority?: string | null; sendReply?: boolean; story?: string; reviewAt?: string | null; quiet?: boolean };
   if (!id) return NextResponse.json({ ok: false, error: "Bad request." }, { status: 400 });
   /* Review Later: out of Open until the day given, or back now with null (lib/pilot setBugReviewAt). */
   if (reviewAt !== undefined) {
@@ -143,6 +161,10 @@ export async function PATCH(req: NextRequest) {
     await saveFixStory(id, story).catch(() => null);
   }
   await setBugState(id, state!);
+  /* That Sorted It (lib/ticket-sort, 25 Nov 2026): Steve's answer already
+     reached them in his chat, so the ticket closes as fixed without the
+     Fixed email or a second Steve message. */
+  if (quiet === true && state === "fixed") return NextResponse.json({ ok: true, told: false });
   /* Fixed means live (15 Sep 2026): the person who reported it is told once,
      so they can try it again. Never fails the change of state. */
   const told = state === "fixed" ? await tellReporter(id, publicOrigin(req)).catch(() => false) : false;

@@ -321,13 +321,15 @@ export function FloatFoot({ left, children }: { left?: React.ReactNode; children
 }
 
 /** Each choice its own card. `on` fills it in, coral unless a `tone` says otherwise. */
-export function FloatChoice({ title, text, icon, on = false, disabled = false, onClick, aside, tone }: {
+export function FloatChoice({ title, text, icon, on = false, disabled = false, onClick, aside, tone, steve }: {
   title: React.ReactNode; text?: React.ReactNode; icon?: React.ReactNode; on?: boolean; disabled?: boolean; onClick: () => void; aside?: React.ReactNode;
   /** The colour it fills with once picked: coral unless said (an emergency red, a routine sage). */
   tone?: "coral" | "red" | "sage";
+  /** Steve's handle on it (lib/steve-guide points at it). */
+  steve?: string;
 }) {
   return (
-    <button type="button" className={`nl-fs-choice${on ? " is-on" : ""}${icon ? " has-icon" : ""}${tone ? ` is-${tone}` : ""}`} aria-pressed={on} disabled={disabled} onClick={onClick}>
+    <button type="button" className={`nl-fs-choice${on ? " is-on" : ""}${icon ? " has-icon" : ""}${tone ? ` is-${tone}` : ""}`} aria-pressed={on} disabled={disabled} onClick={onClick} data-steve={steve}>
       {icon && <span className="nl-fs-choice-i" aria-hidden>{icon}</span>}
       <span className="nl-fs-choice-t">
         <b>{title}</b>

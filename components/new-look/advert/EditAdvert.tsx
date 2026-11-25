@@ -701,7 +701,7 @@ export default function EditAdvert({
                           {b.fix === null && <span className="nl-meta">Tell James, and he&apos;ll clear it.</span>}
                         </span>
                         {b.key === "price" && canEdit && a.details?.rent != null ? (
-                          <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" disabled={a.saving} onClick={() => void a.setPortalPrice()}>
+                          <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" disabled={a.saving} onClick={() => void a.setPortalPrice()} data-steve="advert.set-price">
                             {a.saving ? "Setting it…" : `Set the Price: £${a.details.rent.toLocaleString("en-GB")} pcm`}
                           </button>
                         ) : b.fix && (b.fix !== "agent" || publish?.canNameAgent === true) && (

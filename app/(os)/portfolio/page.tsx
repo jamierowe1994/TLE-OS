@@ -546,7 +546,7 @@ export default function Portfolio() {
           actions={
             <>
               {/* Management transfer (Dan Richards a9f80822, 19 Oct 2026). */}
-              <button type="button" onClick={() => setTakeOn(true)} className="nl-btn nl-btn--primary">
+              <button type="button" onClick={() => setTakeOn(true)} className="nl-btn nl-btn--primary" data-steve="portfolio.take-on">
                 <Ico name="plus" /> Take on a managed home
               </button>
               {/* Sean McMahon, 16 Oct 2026: every tenant's portal login at once, reviewed first. Filtered, it covers what's shown. */}
@@ -1024,7 +1024,7 @@ export default function Portfolio() {
                 ].filter(Boolean).join(", "),
               })}
             />}
-            <button type="button" onClick={() => setTakeOn(true)} className={`${pillClass(false)} inline-flex items-center gap-1.5`}>
+            <button type="button" onClick={() => setTakeOn(true)} className={`${pillClass(false)} inline-flex items-center gap-1.5`} data-steve="portfolio.take-on">
               <DoodleIcon name="pack/house" size={12} className="text-accent-dark" />
               Take on a managed home
             </button>

@@ -789,7 +789,7 @@ function NewLookCompliance({
   const rlp = rlpOn && termsOn;
   const [noRlpAt, setNoRlpAt] = useState(0);
   const noRlpButton = rlp ? (
-    <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setNoRlpAt(Date.now())}>
+    <button type="button" className="nl-btn nl-btn--quiet nl-btn--sm" onClick={() => setNoRlpAt(Date.now())} data-steve="listing.terms-no-rlp" data-steve-never>
       Reissue Without Rent &amp; Legal Protection
     </button>
   ) : null;
@@ -1337,7 +1337,7 @@ function NewLookCompliance({
           {tobState === "record" ? (
             <>
               <Badge tone="warning">Not filed</Badge>
-              <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" onClick={() => setReissue((n) => n + 1)}>
+              <button type="button" className="nl-btn nl-btn--primary nl-btn--sm" onClick={() => setReissue((n) => n + 1)} data-steve="listing.terms-reissue" data-steve-never>
                 Reissue on New Terms
               </button>
               {noRlpButton}
@@ -1348,7 +1348,7 @@ function NewLookCompliance({
                 <Ico name="check" size={14} />
                 Signed
               </span>
-              <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => setReissue((n) => n + 1)}>
+              <button type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => setReissue((n) => n + 1)} data-steve="listing.terms-reissue" data-steve-never>
                 Reissue on New Terms
               </button>
               {noRlpButton}

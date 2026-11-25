@@ -84,6 +84,13 @@ const toAdmin = (href: string, label: string): GuideStep[] => [
 ];
 
 const press = (id: string, say: string): GuideStep => ({ point: [`[data-steve="${id}"]`], say, done: { clicked: true } });
+/** Contractors: its own place in the new rail, under Portfolio in the old one
+ *  (lib/nav). Whichever is on screen; Portfolio opens to show it. */
+const toContractors: GuideStep = {
+  point: ['[data-nav="/contractors"]', '[data-nav="/portfolio"]'],
+  say: "Click Contractors in the menu on the left (under Portfolio, if you don't see it).",
+  done: { path: "/contractors" },
+};
 /** Open a record from its list: point at a row until its drawer is up. */
 const openRow = (drawer: string, say: string): GuideStep => ({
   point: ["[data-steve-row]"],
@@ -379,6 +386,161 @@ export const GUIDE_TARGETS: GuideTarget[] = [
       { point: ['[data-steve="listing.tab.overview"]'], say: "Overview - the address is on it.", done: { present: '[data-steve="home.change-address"]' } },
       press("home.change-address", "Change address: the whole address with the town and postcode, then Save."),
     ],
+  },
+  {
+    id: "edit.home-source",
+    about: "Set or change how the landlord came to us, the Source, on a managed home (needed before it can be re-let). Works on that page only: open the home with this as its walkThrough",
+    steps: [{ point: ['[data-steve="home.source"]'], say: "Source: pick how the landlord came to us from the list. It saves as soon as you pick.", done: { clicked: true } }],
+  },
+
+  /* ── The buttons people ask for by name (25 Nov 2026) ──────────────────
+     Each points at a button that is already built; the person presses it.
+     Some of them Steve may never press himself (data-steve-never: Mark as
+     Let Agreed, the two Reissues) - pointing at them is fine. */
+  {
+    id: "application.plc",
+    about: "Start, carry on or see the PLC check on a let, once the offer is accepted (the PLC check, on the let's page)",
+    steps: [
+      nav("/applications", "Applications"),
+      openRow("application.drawer", "Open the let."),
+      { point: ['[data-steve="application.tab.overview"]'], say: "Overview - the PLC check is on it.", done: { present: '[data-steve="application.plc"]' } },
+      press("application.plc", "The PLC check. If it is greyed out, the line under it says why."),
+    ],
+  },
+  {
+    id: "application.cancel-deal",
+    about: "Cancel a let that has fallen through, with the reason (Cancel the deal, on the let's page)",
+    steps: [
+      nav("/applications", "Applications"),
+      openRow("application.drawer", "Open the let."),
+      {
+        point: ['[data-steve="application.tab.overview"]'],
+        say: "Overview - Cancel the deal is under Things to Do.",
+        done: { any: [{ present: '[data-steve="application.cancel-deal"]' }, { present: '[data-steve="application.cancel-form"]' }] },
+      },
+      {
+        point: ['[data-steve="application.cancel-deal"]'],
+        say: "Cancel the deal. Pick why and type the words it asks for - nothing is cancelled until you do.",
+        done: { any: [{ clicked: true }, { present: '[data-steve="application.cancel-form"]' }] },
+      },
+    ],
+  },
+  {
+    id: "application.push",
+    about: "Push a let to Propoly once the offer is accepted (Push to Propoly, in Next Step on the let's page)",
+    steps: [
+      nav("/applications", "Applications"),
+      openRow("application.drawer", "Open the let."),
+      { point: ['[data-steve="application.tab.overview"]'], say: "Overview - Next Step is on it.", done: { any: [{ present: '[data-steve="application.push-open"]' }, { present: '[data-steve="propoly.push"]' }] } },
+      {
+        point: ['[data-steve="application.push-open"]'],
+        say: "Push to Propoly. It opens everything that goes over, for you to check first.",
+        done: { any: [{ clicked: true }, { present: '[data-steve="propoly.push"]' }] },
+      },
+      { point: ['[data-steve="propoly.push"]'], say: "Check it over, then Push to Propoly. It is still your let after that.", done: { clicked: true } },
+    ],
+  },
+  {
+    id: "home.relet",
+    about: "Re-let a managed home once the tenant has given notice, starting its new listing (Re-let this home, on the home's page). Works on that page only: open the home with this as its walkThrough",
+    steps: [press("home.relet", "Re-let this home: the new listing opens with the home, its rent and service filled in.")],
+  },
+  {
+    id: "home.book-checkout",
+    about: "Book the check-out visit on a managed home once notice is in (Book the check-out, on the home's page). Works on that page only: open the home with this as its walkThrough",
+    steps: [press("home.book-checkout", "Book the check-out. It shows once notice is in, for the day they leave.")],
+  },
+  {
+    id: "home.email-docs",
+    about: "Email a managed home's certificates and documents to the tenants, the landlord or both (Email, then Email Docs, on the home's page). Works on that page only: open the home with this as its walkThrough",
+    steps: [
+      {
+        point: ['[data-steve="home.email"]'],
+        say: "Email, at the top of the home's page.",
+        done: { any: [{ present: '[data-steve="home.email-docs"]' }, { present: '[data-steve="home.send-sheet"]' }] },
+      },
+      {
+        point: ['[data-steve="home.email-docs"]'],
+        say: "Email Docs: tick what to attach and who it goes to. It is kept on the home's record.",
+        done: { any: [{ clicked: true }, { present: '[data-steve="home.send-sheet"]' }] },
+      },
+    ],
+  },
+  {
+    id: "listing.let-agreed",
+    about: "Mark a listing as Let Agreed on the portals, or put it back to available if the let fell through (on the listing's page, by its status)",
+    steps: [
+      nav("/listings", "Listings"),
+      openRow("listing.drawer", "Open the listing."),
+      press("listing.let-agreed", "This one: Mark as Let Agreed, or Back to available. It asks you before anything changes."),
+    ],
+  },
+  {
+    id: "listing.file-draft",
+    about: "File a draft listing away so it is off the Draft tab, or bring it back to drafts (the three dots on the listing's page)",
+    steps: [
+      nav("/listings", "Listings"),
+      openRow("listing.drawer", "Open the draft."),
+      { point: ['[data-steve="listing.more"]'], say: "The three dots, top right.", done: { any: [{ present: '[data-steve="listing.file-draft"]' }, { clicked: true }] } },
+      press("listing.file-draft", "File this draft away. It stays searchable, and Bring back to drafts undoes it."),
+    ],
+  },
+  {
+    id: "advert.set-price",
+    about: "Set the price the portals show from the listing's rent, when the advert says the price is missing (Set the Price, in Edit the advert)",
+    steps: [
+      nav("/listings", "Listings"),
+      openRow("listing.drawer", "Open the listing."),
+      { point: ['[data-steve="listing.tab.marketing"]'], say: "Edit the advert.", done: { any: [{ present: '[data-steve="advert.set-price"]' }, { clicked: true }] } },
+      press("advert.set-price", "Set the Price: it puts the listing's rent on the advert."),
+    ],
+  },
+  {
+    id: "listing.terms-reissue",
+    about: "Send a landlord a new set of terms of business to replace the ones they signed (Reissue on New Terms, on the listing's Compliance)",
+    steps: [
+      nav("/listings", "Listings"),
+      openRow("listing.drawer", "Open the listing."),
+      { point: ['[data-steve="listing.tab.compliance"]'], say: "Compliance - the terms of business are at the top.", done: { present: '[data-steve="listing.terms-reissue"]' } },
+      press("listing.terms-reissue", "Reissue on New Terms. You check them and sign before anything goes."),
+    ],
+  },
+  {
+    id: "listing.terms-no-rlp",
+    about: "Send a landlord new terms of business on the managed service without Rent & Legal Protection (Reissue Without Rent & Legal Protection, on the listing's Compliance)",
+    steps: [
+      nav("/listings", "Listings"),
+      openRow("listing.drawer", "Open the listing."),
+      { point: ['[data-steve="listing.tab.compliance"]'], say: "Compliance - the terms of business are at the top.", done: { present: '[data-steve="listing.terms-no-rlp"]' } },
+      press("listing.terms-no-rlp", "Reissue Without Rent & Legal Protection. You check them and sign before anything goes."),
+    ],
+  },
+  {
+    id: "terms.send",
+    about: "Send a landlord their terms of business from a listing that has none yet (Send Terms of Business, on the listing's Compliance). From an appraisal, use appraisal.terms",
+    steps: [
+      nav("/listings", "Listings"),
+      openRow("listing.drawer", "Open the listing."),
+      { point: ['[data-steve="listing.tab.compliance"]'], say: "Compliance - the terms of business are at the top.", done: { present: '[data-steve="terms.open-send"]' } },
+      press("terms.open-send", "Send Terms of Business. It opens the terms for you to check and sign before they go."),
+    ],
+  },
+  { id: "contractor.add", about: "Add a new contractor to the trades book (Add a contractor, on Contractors)", steps: [toContractors, press("contractors.add", "Add a contractor: their trade, details and how to reach them.")] },
+  {
+    id: "contractor.invoice",
+    about: "Log a contractor's invoice for work with no job on the OS (Log an invoice, on Contractors)",
+    steps: [toContractors, press("contractors.log-invoice", "Log an invoice: the home, the contractor and the invoice itself.")],
+  },
+  { id: "viewing.new-appointment", about: "Put a meeting, an inspection or something personal in the diary (New appointment, on the Diary)", steps: [nav("/viewings", "Diary"), press("viewings.new-appointment", "New appointment, at the top.")] },
+  {
+    id: "finances.statement",
+    about: "A finance statement for any period (Statement, on Finances)",
+    steps: [nav("/finances", "Finances"), { point: ['[data-steve="finances.statement"]'], say: "Statement, at the top. Pick the period you want.", done: { any: [{ clicked: true }, { path: "/finances/statement" }] } }],
+  },
+  {
+    id: "portfolio.take-on",
+    about: "Take on a managed home from another agent or a landlord, a management transfer (Take on a managed home, on Portfolio)",
+    steps: [nav("/portfolio", "Portfolio"), press("portfolio.take-on", "Take on a managed home, at the top.")],
   },
 ];
 

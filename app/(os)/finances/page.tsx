@@ -38,7 +38,7 @@ export default function Finances() {
           blurb="What the book earns this month, what comes to you, and where next month lands. Live off the book at the rates an owner sets."
           actions={
             <>
-              <Link href="/finances/statement" className="nl-btn nl-btn--secondary"><Ico name="arrow" /> Statement</Link>
+              <Link href="/finances/statement" className="nl-btn nl-btn--secondary" data-steve="finances.statement"><Ico name="arrow" /> Statement</Link>
               <button type="button" className={`nl-btn ${customising ? "nl-btn--sage" : "nl-btn--quiet"}`} aria-pressed={customising} onClick={() => setCustomising((c) => !c)}>
                 {customising ? "Done" : <><Ico name="grid" /> Customise the board</>}
               </button>
@@ -90,6 +90,7 @@ export default function Finances() {
           {/* The agents' call, 19 Oct 2026: a statement for any period, when they want it. */}
           <Link
             href="/finances/statement"
+            data-steve="finances.statement"
             className="flex items-center gap-1.5 rounded-full border border-line/80 bg-page px-4 py-2 text-[12px] font-medium text-muted transition-colors hover:border-ink hover:text-ink"
           >
             <DoodleIcon name="file-contract" size={13} />Statement

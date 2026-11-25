@@ -76,8 +76,11 @@ const NOT_AN_EDIT =
  * tenant's move-in date" is the move-in, "LL 2's reg number" is the
  * registration, and "managed, not let only" is the service.
  */
-export type Topic = "dates" | "money" | "service" | "tenant" | "registration" | "landlord" | "address" | "details" | "advert" | "contact";
+export type Topic = "source" | "dates" | "money" | "service" | "tenant" | "registration" | "landlord" | "address" | "details" | "advert" | "contact";
 const TOPICS: { topic: Topic; words: RegExp }[] = [
+  /* How the landlord came to us (9 asks of Steve, Oct-Nov 2026). First, or
+     "landlord source" would read as the landlord. */
+  { topic: "source", words: /\b(?:(?:landlord )?source|how the landlord came to us|lead source|referr(?:al|ed))\b/i },
   { topic: "dates", words: /\b(?:move[- ]?in|moving in|start(?:s|ing)? date|tenancy (?:start|end|length|term)|end date|available (?:date|from))\b/i },
   { topic: "money", words: /\b(?:deposit|holding (?:fee|deposit)|rent(?! collect)|price|asking)\b/i },
   /* "Managed" on its own describes the home ("the tenant on this managed
@@ -113,6 +116,7 @@ export const EDIT_TARGETS: Record<RecordKind, Partial<Record<Topic, string>>> = 
     contact: "edit.home-tenant",
     landlord: "edit.home-landlord",
     address: "edit.address",
+    source: "edit.home-source",
   },
   listing: {
     dates: "edit.listing-details",
@@ -138,13 +142,14 @@ export const EDIT_SAYS: Record<string, string> = {
   "edit.listing-advert": "Edit the advert changes the description, photos, EPC and everything the portals show.",
   "edit.home-details": "Edit on The Details changes the service, the type of home, the tenancy dates, the gas supply and who lives here.",
   "edit.home-tenant": "Edit on the tenant changes their mobile, email and name.",
+  "edit.home-source": "Source, on the home's Overview beside the agent and the keys, says how the landlord came to us. Pick one and it saves.",
   "edit.home-landlord": "The Landlords card changes their details, adds another landlord, or changes the landlord.",
   "edit.address": "Change address puts the right address on the listing, the home and the portals.",
 };
 
 /* ── A question Steve can answer ───────────────────────────────────────── */
 
-const HOW_TO = new RegExp(
+export const HOW_TO = new RegExp(
   [
     String.raw`\bhow (?:do|can|should|would|could|does) (?:i|we|you|one|it|this)\b`,
     String.raw`\bhow to\b`,
@@ -163,7 +168,7 @@ const HOW_TO = new RegExp(
 );
 
 /* They have asked him already, and are telling James what he said. */
-const ASKED_HIM = /\b(?:asked|ask(?:ing)?) (?:steve|hamish)\b|\b(?:steve|hamish) (?:says|said|is saying|told|tells|thinks)\b/i;
+export const ASKED_HIM = /\b(?:asked|ask(?:ing)?) (?:steve|hamish)\b|\b(?:steve|hamish) (?:says|said|is saying|told|tells|thinks)\b/i;
 
 export type Deflection =
   /** Edit on this record: `guide` is the GUIDE_TARGETS route to its Edit. */

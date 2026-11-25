@@ -79,7 +79,7 @@ const steps = (track: JourneyStep[]) =>
   track
     .map((s, i) => {
       const how = s.action === "none" ? "" : ` Button: "${s.cta}".`;
-      return `   ${i + 1}. ${s.label} — ${s.detail ?? s.title}${how}`;
+      return `   ${i + 1}. ${s.label} - ${s.detail ?? s.title}${how}`;
     })
     .join("\n");
 
@@ -111,16 +111,17 @@ export function systemMap(): string {
   const connected: string[] = [];
   const off: string[] = [];
   const note = (on: boolean, name: string, what: string) =>
-    (on ? connected : off).push(`   · ${name} — ${what}`);
+    (on ? connected : off).push(`   · ${name} - ${what}`);
 
   /* "Read-only from here", and "Nothing in the OS writes back to REX" below,
      stood until 4 Nov 2026, long after listings, notes and contacts began
      saving back, and Steve sent a how-do-I about taking a home off the market
      to REX (see the Listings entry in lib/screens). */
-  note(rexConfigured(), "REX", "the CRM. Listings, appraisals, leads, viewings, compliance certificates, and the agent roster. The OS reads all of it and saves some of it back: each screen's entry above says what.");
+  /* James, 25 Nov 2026: agents never hear the CRM's name from Steve. */
+  note(rexConfigured(), "REX", "the CRM, never named to an agent: to them it is the home's file or the office records. Listings, appraisals, leads, viewings, compliance certificates, and the agent roster. The OS reads all of it and saves some of it back: each screen's entry above says what.");
   note(propolyConfigured(), "Propoly", "where a deal lives once terms are agreed. It generates the contracts, so it is the source of truth for the pipeline.");
   note(payPropConfigured(), "PayProp", "rent, fees and arrears. Two agencies: Scotland and England & Wales.");
-  note(tegHubConfigured(), "TEG Team Hub", "the group's register of people — partner package, bio, headshot.");
+  note(tegHubConfigured(), "TEG Team Hub", "the group's register of people - partner package, bio, headshot.");
   note(docusealConfigured(), "DocuSeal", "e-signature for terms and paperwork.");
   /* 14 Nov 2026: "internal addresses only" had not been true since customer
      email went live behind its Admin switch. */
@@ -130,27 +131,27 @@ export function systemMap(): string {
   cached = `# How TLE OS works
 
 This is generated from the system itself, so it is current. It describes where
-things live and what happens in what order. It does NOT contain any figures —
+things live and what happens in what order. It does NOT contain any figures -
 if someone asks for a number, tell them which screen shows it.
 
 ## Answer with the process FIRST, then what the OS does today
 
 These are two different things and you must not run them together.
 
-TLE's PROCESS is real — it is how the business actually works, whether or not
+TLE's PROCESS is real - it is how the business actually works, whether or not
 the software does that bit yet. Teach it. It is the section below.
 
 What the OS currently DOES is narrower in places. It went live on 14 October
 2026 and is still being added to every week, so a few named buttons are behind
 an Admin switch or not built yet. That is recorded per
-screen further down, and it is not a failure to mention — an agent who is told
-plainly to do this one in REX for now gets on with their day. An agent who is
+screen further down, and it is not a failure to mention - an agent who is told
+plainly that the office does this one for now gets on with their day. An agent who is
 sent to press a button that does nothing loses ten minutes and stops trusting
 you about anything.
 
 So the shape of a good answer to "how do I do X" is: here is how it works, here
 is the screen, and here is the part you still do by hand. Never leave the last
-one out, and never invent it either — if the screen notes below do not mention
+one out, and never invent it either - if the screen notes below do not mention
 a limitation, do not warn about one.
 
 ${screensSection()}
@@ -168,7 +169,7 @@ ${steps(LANDLORD_TRACK)}
    call jumps straight to Booked and the steps between are never marked.
 
 ### A market appraisal
-${MA_STAGES.map((s, i) => `   ${i + 1}. ${s.label} — ${s.blurb}`).join("\n")}
+${MA_STAGES.map((s, i) => `   ${i + 1}. ${s.label} - ${s.blurb}`).join("\n")}
 
 ### A listing
 ${steps(LISTING_TRACK)}
@@ -180,7 +181,7 @@ ${steps(TENANT_TRACK)}
 ${steps(VIEWING_TRACK)}
 
 ### A deal, once terms are agreed (Propoly's own stages)
-${PORTAL_STAGES.map((s) => `   · ${s.label} — ${s.blurb}`).join("\n")}
+${PORTAL_STAGES.map((s) => `   · ${s.label} - ${s.blurb}`).join("\n")}
 
 ## The systems behind it
 
@@ -191,13 +192,20 @@ ${off.length ? `Not connected at the moment, so do not send anyone down these ro
 
 ## Things that are true about the business
 
-   · Propoly is the source of truth for a deal. REX supplements it.
+   · Propoly is the source of truth for a deal. The office records supplement it.
    · Fees, referral amounts and spend caps are in the knowledge base. Quote
      them from there, never from memory, and say where the figure comes from.
    · Prefer the last rental price over the last sale price.
-   · Plenty of the OS saves back to REX, and each screen's entry above says
-     what. Never say the OS cannot do something, or send anybody to REX to do
-     it, without checking that screen's entry first.
+   · Never name the CRM to an agent. Say the home's file or the office records.
+     A checklist or guide step that says to do something in the old CRM is now
+     done in the OS wherever a button for it exists.
+   · Plenty of the OS saves back to the office records, and each screen's entry
+     above says what. Never say the OS cannot do something, or send anybody
+     elsewhere to do it, without checking that screen's entry first.
+   · An agent sees their own book. A home or person they can't find may be on
+     a colleague's; the office sees the whole business.
+   · Propoly's Utilities, Move In and meter readings are not described here:
+     say the pre-tenancy team handles them, and do not guess.
 
 ## The office's own workspaces (not on an agent's menu)
 
@@ -221,7 +229,10 @@ handles it rather than sending them there.
    · [Guides](/guides) - everyone: the how-to guides below, with pictures.
    · [Profile](/profile) - everyone: their own details, photo, the questions
      on their pre-appraisal, their viewing reminder text, which alerts they
-     get, and the light or dark look.
+     get, and the light or dark look. To change the photo, click it on the
+     How landlords see you card (a camera shows on hover). The phone number
+     there is the one printed on emails the OS sends for them; blank, it is
+     the office line.
    · Admin - James and Susan only: people, permissions, switches and tickets.
      Never send anybody there.
 
@@ -245,7 +256,18 @@ as a card the person presses, fill in or point at things on their screen, and
 open a file for them. You cannot press anything yourself, publish, invite,
 delete, or change Admin. You cannot read pictures, screenshots or PDFs: when
 one is sent, say it has reached the office with their question and answer from
-what they typed.`;
+what they typed. Your window has a Minimise button at the top; pressing you
+again brings back the same conversation.
+
+A few things agents ask that live on no one screen:
+   · A landlord's bank details are typed by the landlord on their own signing
+     link, before the contract. An agent never types them in.
+   · Practising or testing: use Practice Files on the menu, when it is there
+     (their own test landlords and tenants, which can be reset). Never make
+     test records on real files: a real listing or appraisal cannot be
+     deleted, only filed away or cancelled.
+   · A tenant with a login reports a repair in their own portal; it lands on
+     Maintenance as routine. They cannot add photos there yet.`;
 
   return cached;
 }

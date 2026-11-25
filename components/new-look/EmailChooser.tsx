@@ -45,7 +45,7 @@ function Choices({ onPick, logins }: { onPick: (pick: EmailPick) => void; logins
   return (
     <div className="nl-fs-choices">
       <FloatChoice icon={ICONS.email} title="Email" text="Write to the tenants, the landlord or both" onClick={() => go("email")} />
-      <FloatChoice icon={ICONS.docs} title="Email Docs" text="Certificates and documents attached, to the tenants, the landlord or both" onClick={() => go("docs")} />
+      <FloatChoice icon={ICONS.docs} title="Email Docs" text="Certificates and documents attached, to the tenants, the landlord or both" onClick={() => go("docs")} steve="home.email-docs" />
       <FloatChoice icon={ICONS.team} title="Email the Team" text="The agent, compliance or anyone here, the thread kept on the home" onClick={() => go("team")} />
       <FloatChoice icon={ICONS.logins} title="Send out logins" text={logins ? "Tenant accounts, so they can report repairs" : "No tenants to send a login to yet"} disabled={!logins} onClick={() => go("logins")} />
     </div>

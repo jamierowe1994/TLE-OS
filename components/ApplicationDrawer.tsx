@@ -474,7 +474,7 @@ function CancelDeal({ letId, property, cancelled, onCancelled, onTell, onClose }
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-[140] flex items-start justify-center overflow-y-auto p-4 sm:items-center">
       <button type="button" aria-label="Close" onClick={onClose} className="fixed inset-0 cursor-default bg-ink/55 backdrop-blur-[3px]" />
-      <div className="fade-up relative w-full max-w-[560px] rounded-2xl border border-line/70 bg-page p-6 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.45)]">
+      <div className="fade-up relative w-full max-w-[560px] rounded-2xl border border-line/70 bg-page p-6 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.45)]" data-steve="application.cancel-form">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-[20px] leading-tight">{cancelled ? "Deal cancelled" : "Cancel the deal"}</h2>
@@ -1442,7 +1442,7 @@ export default function ApplicationDrawer({
         <Ico name="mail" /> Update the tenant
       </button>
     ) : plcCan && plcHref && !(!intro && app && propoly.state === "push") ? (
-      <button type="button" className="nl-btn nl-btn--primary" onClick={() => setPlcOpen(true)}>
+      <button type="button" className="nl-btn nl-btn--primary" onClick={() => setPlcOpen(true)} data-steve="application.plc">
         <Ico name="arrow" /> {plcLabel}
       </button>
     ) : !app && deal ? (
@@ -1460,7 +1460,7 @@ export default function ApplicationDrawer({
       "rule",
       ...(people.length ? [{ label: people.length > 1 ? "The tenants" : "The tenant", onClick: () => setPerson({ role: "tenant", index: 0 }) }] : []),
       { label: noLandlord ? "Add the landlord" : landlordsAll.length > 1 ? "The landlords" : "The landlord", onClick: () => (noLandlord ? setAddLandlordOpen(true) : setPerson({ role: "landlord", index: 0 })) },
-      ...(plcHref && plcCan && !(mainJob && propoly.state !== "push") ? [{ label: plcLabel, onClick: () => setPlcOpen(true) }] : []),
+      ...(plcHref && plcCan && !(mainJob && propoly.state !== "push") ? [{ label: plcLabel, onClick: () => setPlcOpen(true), steve: "application.plc" }] : []),
       ...(app && !intro && (propoly.state === "early" || (propoly.state === "in" && !propoly.url)) ? [{ label: propoly.state === "in" ? "In Propoly" : "Not in Propoly yet", sub: propoly.sub ?? undefined, onClick: () => setPropolyOpen(true) }] : []),
       ...(app && !intro && propoly.state === "push" && cancelled ? [{ label: "Push to Propoly", onClick: () => setPropolyOpen(true) }] : []),
       ...(propoly.state === "in" && propoly.url ? [{ label: "Open in Propoly", sub: propoly.sub ?? undefined, href: propoly.url }] : []),
@@ -1472,7 +1472,7 @@ export default function ApplicationDrawer({
       "rule",
       cancelled
         ? { label: "Deal cancelled", sub: cancelled.reason, onClick: () => setCancelOpen(true) }
-        : { label: "Cancel the deal", sub: "Give a reason first", danger: true, onClick: () => setCancelOpen(true) },
+        : { label: "Cancel the deal", sub: "Give a reason first", danger: true, onClick: () => setCancelOpen(true), steve: "application.cancel-deal" },
     ];
 
     /* Where Propoly stands, beside the stage, as on the old page's top row. */
@@ -1522,7 +1522,7 @@ export default function ApplicationDrawer({
       { id: "activity", label: "Activity" },
     ];
 
-    const thingLine = (label: string, sub: string, go: (() => void) | null, href?: string | null, done?: boolean) => {
+    const thingLine = (label: string, sub: string, go: (() => void) | null, href?: string | null, done?: boolean, steve?: string) => {
       const inner = (
         <>
           <span className="nl-strong">{label}</span>
@@ -1533,9 +1533,9 @@ export default function ApplicationDrawer({
       return (
         <li key={label}>
           {href && !done ? (
-            <Link href={href} className="nl-apps-todo">{inner}</Link>
+            <Link href={href} className="nl-apps-todo" data-steve={steve}>{inner}</Link>
           ) : (
-            <button type="button" className="nl-apps-todo" onClick={go ?? undefined} disabled={!go || done} title={!go || done ? sub : undefined}>
+            <button type="button" className="nl-apps-todo" onClick={go ?? undefined} disabled={!go || done} title={!go || done ? sub : undefined} data-steve={steve}>
               {inner}
             </button>
           )}
@@ -2081,12 +2081,12 @@ export default function ApplicationDrawer({
                 <section className="nl-cell">
                   <h3 className="nl-block-title">Things to Do</h3>
                   <ul className="nl-apps-todos">
-                    {!intro && thingLine(plcLabel, plcSub, plcCan ? () => setPlcOpen(true) : null, null, plcDone)}
+                    {!intro && thingLine(plcLabel, plcSub, plcCan ? () => setPlcOpen(true) : null, null, plcDone, "application.plc")}
                     {thingLine("Send a reminder", intro ? "Marketing only - nothing to chase" : "Sign, pay, references", cancelled || intro ? null : () => setBuilder({ mode: "reminder" }))}
                     {thingLine("Customer update", "Email tenant or landlord", () => setBuilder({ mode: "update" }))}
                     {thingLine("Add a document", "ID, payslips, receipts", () => setNlTab("documents"))}
                     {thingLine("Add a comment", "For the whole team", () => setNlTab("notes"))}
-                    {thingLine(cancelled ? "Deal cancelled" : "Cancel the deal", cancelled ? cancelled.reason : "Give a reason first", () => setCancelOpen(true))}
+                    {thingLine(cancelled ? "Deal cancelled" : "Cancel the deal", cancelled ? cancelled.reason : "Give a reason first", () => setCancelOpen(true), null, false, "application.cancel-deal")}
                   </ul>
                 </section>
 
@@ -2525,6 +2525,7 @@ export default function ApplicationDrawer({
                 done={plcDone}
                 off={!plcDone && (Boolean(cancelled) || !plcStartHref || !plcReady)}
                 href={plcStartHref ?? undefined}
+                steve="application.plc"
               />
               )}
               <Tile icon="message" label="Add a comment" sub="For the whole team" onClick={() => setPanel("notes")} steve="application.add-comment" />
@@ -2550,6 +2551,7 @@ export default function ApplicationDrawer({
                 sub={cancelled ? cancelled.reason : "Give a reason first"}
                 done={Boolean(cancelled)}
                 onClick={() => setCancelOpen(true)}
+                steve="application.cancel-deal"
               />
             </div>
           </section>

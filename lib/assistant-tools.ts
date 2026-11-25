@@ -21,6 +21,7 @@ import { searchMatches } from "@/lib/search-match";
 import { checkMyEmails } from "@/lib/assistant-steve-mail";
 import { proposeRtrExpiry } from "@/lib/assistant-steve-rtr";
 import { proposeAddressChange } from "@/lib/assistant-steve-address";
+import { READ_TOOLS } from "@/lib/assistant-steve-reads";
 
 /**
  * WHAT STEVE CAN ACTUALLY GO AND FIND OUT.
@@ -946,6 +947,9 @@ export const TOOLS: AssistantTool[] = [
   checkMyEmails,
   proposeRtrExpiry,
   proposeAddressChange,
+  /* 25 Nov 2026, Steve's big update: six read-only look-ups behind the
+     "stevereads" switch (lib/assistant-steve-reads). */
+  ...READ_TOOLS,
 ];
 
 export type FileLink = { href: string; label: string; /** A walk-through (lib/steve-guide) to start as it opens. */ guide?: string };

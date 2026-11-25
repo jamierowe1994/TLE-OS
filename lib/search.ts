@@ -10,6 +10,7 @@ import type { Lead } from "@/lib/leads-sample";
 import { peopleLike } from "@/lib/rex-people-store";
 import { searchMatches, searchRank } from "@/lib/search-match";
 import { currentLets } from "@/lib/current-lets";
+import { EMPTY_PASSPORT, answered, type PassportData } from "@/lib/passport-shape";
 
 /**
  * The one search, shared by the search bar (/api/search) and Steve (2 Oct
@@ -38,6 +39,75 @@ async function cachedLeads(rexUserId: string | null): Promise<Lead[]> {
   const key = rexUserId ? `leads:v2:agent:${rexUserId}` : "leads:v2:all";
   const rows = await q<{ payload: { book?: { leads?: Lead[] } } }>(`SELECT payload FROM os_cache WHERE key = $1`, [key]).catch(() => []);
   return rows[0]?.payload?.book?.leads ?? [];
+}
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Diary viewings and tenant passports for one email address, scoped to rexUserId (null: the business). */
+async function byEmail(
+  email: string,
+  rexUserId: string | null,
+  listings: { id: string | number }[],
+  homes: { listingId: string | number }[],
+  leads: Lead[]
+): Promise<Hit[]> {
+  const listed = new Set(listings.map((l) => String(l.id)));
+  const managedIds = new Set(homes.map((h) => String(h.listingId)));
+  const mine = rexUserId ? [...listed, ...managedIds] : null;
+  const where = (listingId: string | null) =>
+    listingId ? (managedIds.has(listingId) && !listed.has(listingId) ? `/portfolio/${encodeURIComponent(listingId)}` : `/listings?open=${encodeURIComponent(listingId)}`) : null;
+  const when = (d: Date | string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
+  const out: Hit[] = [];
+
+  const [viewings, booked, passports] = await Promise.all([
+    q<{ id: string; listing_id: string | null; starts_at: Date; title: string; label: string | null; contacts: { name?: string; email?: string; leadId?: string | null }[] | null }>(
+      `SELECT id, listing_id, starts_at, title, payload->>'listingLabel' AS label, contacts
+         FROM os_viewings
+        WHERE kind = 'viewing' AND contacts @> $1::jsonb AND ($2::text[] IS NULL OR listing_id = ANY($2::text[]))
+        ORDER BY starts_at DESC LIMIT 3`,
+      [JSON.stringify([{ email }]), mine]
+    ).catch(() => []),
+    q<{ id: string; starts_at: Date; where_at: string | null; lead_id: string | null; listing_id: string | null; name: string | null }>(
+      `SELECT id, starts_at, where_at, lead_id, booking->>'listingId' AS listing_id, booking->>'applicantName' AS name
+         FROM os_appointments
+        WHERE kind = 'viewing' AND booking IS NOT NULL AND LOWER(contact_email) = $1
+          AND ($2::text[] IS NULL OR booking->>'listingId' = ANY($2::text[]))
+        ORDER BY starts_at DESC LIMIT 3`,
+      [email, mine]
+    ).catch(() => []),
+    q<{ name: string; data: Partial<PassportData> | null; invited_at: Date | null; submitted_at: Date | null; updated_at: Date }>(
+      `SELECT p.name, CASE WHEN p.submitted_at IS NULL THEN p.data END AS data, p.invited_at, p.submitted_at, p.updated_at
+         FROM os_tenant_passports p
+        WHERE lower(trim(p.email)) = $1 AND COALESCE(p.contact_id, '') <> 'demo'
+          AND ($2::text IS NULL
+               OR p.agent_id IN (SELECT id FROM os_users WHERE rex_user_id = $2)
+               OR lower(trim(p.email)) IN (SELECT lower(email) FROM os_leads WHERE assignee_id = $2 AND email <> ''))
+        ORDER BY (p.submitted_at IS NOT NULL) DESC, p.updated_at DESC LIMIT 1`,
+      [email, rexUserId]
+    ).catch(() => []),
+  ]);
+
+  for (const v of viewings) {
+    const c = (Array.isArray(v.contacts) ? v.contacts : []).find((x) => (x.email ?? "").trim().toLowerCase() === email);
+    const href = c?.leadId ? `/leads?open=${encodeURIComponent(c.leadId)}` : where(v.listing_id);
+    if (!href) continue;
+    const at = (v.label || v.title || "").replace(/^viewing[:\s-]+/i, "").trim() || "a property";
+    out.push({ kind: "person", title: c?.name?.trim() || email, sub: `viewing · ${at} · ${when(v.starts_at)}`, href });
+  }
+  for (const b of booked) {
+    const href = b.lead_id ? `/leads?open=${encodeURIComponent(b.lead_id)}` : where(b.listing_id);
+    if (!href) continue;
+    out.push({ kind: "person", title: b.name?.trim() || email, sub: `viewing booked in the OS · ${b.where_at?.trim() || "a property"} · ${when(b.starts_at)}`, href });
+  }
+  for (const p of passports) {
+    /* Started is answers beyond the name and email the invite seeds - the passportStates rule. */
+    const d = { ...EMPTY_PASSPORT, ...(p.data ?? {}) } as PassportData;
+    const started = !p.submitted_at && answered(d).done > answered({ ...EMPTY_PASSPORT, legalName: d.legalName, email: d.email }).done;
+    const state = p.submitted_at ? `completed ${when(p.submitted_at)}` : started ? `started, last changed ${when(p.updated_at)}` : p.invited_at ? `sent ${when(p.invited_at)}` : "made, never sent";
+    const lead = leads.find((l) => (l.email ?? "").trim().toLowerCase() === email);
+    out.push({ kind: "person", title: p.name?.trim() || email, sub: `tenant passport · ${state}`, href: lead ? `/leads?open=${encodeURIComponent(lead.id)}&passport=1` : "/leads?passports=done" });
+  }
+  return out;
 }
 
 export async function searchEverything(needle: string, rexUserId: string | null): Promise<Hit[]> {
@@ -131,6 +201,20 @@ export async function searchEverything(needle: string, rexUserId: string | null)
       sub: `person · ${reach}${p.age ? ` · read ${p.age}` : ""}`,
       href: `/leads?person=${encodeURIComponent(p.id)}`,
     });
+  }
+
+  /* A whole email address also finds the person in the diary and on a tenant
+     passport (James, 25 Nov 2026, Steve's big update): somebody who booked a
+     viewing or was sent a passport may have no lead or application to find.
+     Exact address only, and scoped as the rest: an agent sees viewings on
+     their own listings and homes, and the passports passportStates gives
+     them (lib/passport-states). A passport hit says where it has got to,
+     never what is in it. */
+  if (EMAIL.test(needle.trim()) && hasDb() && cap(140)) {
+    for (const h of await byEmail(needle.trim().toLowerCase(), rexUserId, book?.listings ?? [], managed?.properties ?? [], leads).catch(() => [])) {
+      if (!cap(140)) break;
+      push(h);
+    }
   }
 
   /* The exact home first (the same room at the same house), then whole-word

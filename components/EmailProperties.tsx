@@ -48,6 +48,11 @@ export default function EmailProperties({
      on a day every one of his list reads the server saw came back whole. One
      that went wrong in his browser left him with no list and no way back. */
   const [bookTry, setBookTry] = useState(0);
+  /* Sean McMahon, ticket 3ab61f63 (25 Nov 2026): first thing in the morning
+     an agent's own book is read fresh (nothing keeps it warm overnight), and
+     the box sat on "Loading" with no word and no end. Now it says so after a
+     few seconds, and gives up with Try again after a minute. */
+  const [bookSlow, setBookSlow] = useState(false);
   const [find, setFind] = useState("");
   const [extra, setExtra] = useState<Listing[]>([]);
   useEffect(() => {
@@ -55,10 +60,12 @@ export default function EmailProperties({
     let live = true;
     let retry: ReturnType<typeof setTimeout> | null = null;
     setBookFailed(false);
+    setBookSlow(false);
+    const slow = setTimeout(() => live && setBookSlow(true), 5000);
     const read = async (again: boolean) => {
       let why = "";
       try {
-        const r = await fetch("/api/listings?tests=0", { cache: "no-store" });
+        const r = await fetch("/api/listings?tests=0", { cache: "no-store", signal: AbortSignal.timeout(60_000) });
         const j = await r.json().catch(() => null);
         if (!live) return;
         if (j?.ok && Array.isArray(j.listings)) {
@@ -75,7 +82,8 @@ export default function EmailProperties({
       if (!live) return;
       /* One quiet second go: most of these are a blip, and nobody should
          see a failure the next request would have fixed. */
-      if (again) {
+      /* A minute with no answer is not a blip: a second go would be another minute. */
+      if (again && !/timed? ?out|abort/i.test(why)) {
         retry = setTimeout(() => void read(false), 1200);
         return;
       }
@@ -85,6 +93,7 @@ export default function EmailProperties({
     void read(true);
     return () => {
       live = false;
+      clearTimeout(slow);
       if (retry) clearTimeout(retry);
     };
   }, [open, book, bookTry]);
@@ -269,7 +278,13 @@ export default function EmailProperties({
                   placeholder="Search by street, town or postcode"
                   className="mt-2 w-full rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink"
                 />
-                {book === null && !bookFailed && <p className="mt-3 text-[12px] text-muted">Loading the live book…</p>}
+                {book === null && !bookFailed && (
+                  <p className="mt-3 text-[12px] text-muted">
+                    {bookSlow
+                      ? "Still fetching your homes. The first look of the day can take up to a minute."
+                      : "Loading the live book…"}
+                  </p>
+                )}
                 {bookFailed && (
                   <p className="mt-3 text-[12px] text-muted">
                     We could not load the list of homes just now.{" "}

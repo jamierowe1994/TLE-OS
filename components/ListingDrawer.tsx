@@ -3019,7 +3019,7 @@ function ListingDrawerBody({
                 </button>
               )}
               {letShown && (
-                <button type="button" data-steve-never className="nl-market-btn" aria-expanded={letAsk} onClick={() => (letAsk ? setLetAsk(false) : askLet())}>
+                <button type="button" data-steve-never data-steve="listing.let-agreed" className="nl-market-btn" aria-expanded={letAsk} onClick={() => (letAsk ? setLetAsk(false) : askLet())}>
                   {letTick?.letAgreed ? "Back to available" : "Mark as Let Agreed"}
                 </button>
               )}
@@ -3049,13 +3049,14 @@ function ListingDrawerBody({
             )}
             {mainJob}
             <Menu
+              steve="listing.more"
               items={[
                 ...(isLive || listing.publishedAt ? [{ label: "Preview on the portals", onClick: () => setPortalStats(true) }] : []),
                 { label: "Mail out to matching tenants", onClick: () => setEmailing(true), steve: "listing.mail-db" },
                 ...(mainIs !== "offer" && canOffer ? [{ label: "Make an offer", onClick: () => setPickingOfferer(true), steve: "listing.make-offer" }] : []),
                 ...(LISTING_BOOKER_LIVE && mainIs !== "book" && !listing.letAgreed && !withdrawnHere ? [{ label: "Book a viewing", onClick: () => setChoosingBook(true) }] : []),
                 ...(LISTING_BOOKER_LIVE && !listing.letAgreed ? [{ label: "Hold a viewing slot", onClick: () => setSlotting(true) }] : []),
-                ...(canFileAway ? [{ label: archiveBusy ? "Saving…" : listing.archived ? "Bring back to drafts" : "File this draft away", disabled: archiveBusy, onClick: () => onArchive?.(String(listing.id), listing.archived ? "restore" : "archive") }] : []),
+                ...(canFileAway ? [{ label: archiveBusy ? "Saving…" : listing.archived ? "Bring back to drafts" : "File this draft away", disabled: archiveBusy, onClick: () => onArchive?.(String(listing.id), listing.archived ? "restore" : "archive"), steve: "listing.file-draft" }] : []),
                 ...(mainIs === "push" ? [{ label: "Live without Portals", onClick: () => (publishCanPress ? (setQuietNote(null), setQuietAsk(true)) : setPortalNote(lockedSentence(publishArea, publishLevel))) }] : []),
                 ...(letShown ? [{ label: letTick?.letAgreed ? "Back to available" : "Mark as Let Agreed", onClick: askLet }] : []),
                 ...((listing.letAgreed || withdrawnHere) && Number(listing.id) > 0 ? [{ label: "Use as a case study", onClick: () => void startCaseStudy(listing.id, (h) => { window.location.href = h; }) }] : []),
@@ -3838,6 +3839,7 @@ function ListingDrawerBody({
               {canFileAway && (
                 <button
                   type="button"
+                  data-steve="listing.file-draft"
                   disabled={archiveBusy}
                   onClick={() => onArchive?.(String(listing.id), listing.archived ? "restore" : "archive")}
                   className="mt-2.5 self-start text-[11.5px] text-muted underline underline-offset-2 transition-colors hover:text-ink disabled:opacity-50"

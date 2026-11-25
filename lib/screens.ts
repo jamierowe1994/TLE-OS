@@ -36,7 +36,9 @@ import { AGENT_ROUTES, AGENT_NAV, navRoutesMismatch, type AgentRoute } from "@/l
  * lib/journey.ts, and it is worth teaching. What must never be implied is that
  * a screen does something it does not. So every screen says which it is, and
  * `caveats` name the specific things that do not work, in the words an agent
- * would use — "book it in REX instead", not "unimplemented".
+ * would use — "the office does this one for now", not "unimplemented". Never
+ * the CRM's name: agents hear "the home's file" or "the office records"
+ * (James, 25 Nov 2026).
  *
  * Keep `caveats` current the way you would fix a lie on a tile. A stale caveat
  * here is the failure this whole file exists to prevent, just wearing the
@@ -67,7 +69,7 @@ export interface ScreenDoc {
 
 export const SCREENS: Record<AgentRoute, ScreenDoc> = {
   "/dashboard": {
-    purpose: "The morning view — what is happening across your lettings business today.",
+    purpose: "The morning view - what is happening across your lettings business today.",
     does: [
       "Read your own bento board of tiles.",
       "Press Customise to add, remove or resize tiles from the tray, then Done.",
@@ -94,6 +96,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     does: [
       "Report a repair: the property, what is wrong, how urgent. Emergency means attend within 24 hours, urgent within 3 days, routine within 14. The clock starts when it is reported.",
       "Plan a certificate: a gas safety, an EICR, a boiler service, an inspection, with the date it is due. Compliance can raise one from a certificate that is coming up.",
+      "The landlord step on Raise a job is for that job only. To put a landlord on the home itself, use Add the landlord (or + Add a landlord) on the home's Landlord card.",
       "Open a job for its sheet: what needs doing next, the contractor, the quote and the landlord's authority, the invoice, the timeline under each person's name, and the files on it.",
       "An invoice a contractor uploads from their own link does not go to accounts. It waits on the job as An Invoice to Check and the home's agent is emailed: Send to Accounts passes it on, Decline (with why) lets the contractor upload a corrected one. Only the home's agent, whoever raised the job, or the office can press either. It is also on their bell.",
       "Where Check a Contractor's Invoice is switched on for them, the job's card and Contractors > To Approve open Check the Invoice: the invoice on the left, the figures on the right. The agent can put the total the landlord is charged above the contractor's figure (never below); the difference is the agent's own share, shown in pounds and pence before they approve. Accounts are emailed all three figures. Declining needs a reason, and an email to the contractor is written for the agent to send themselves.",
@@ -104,7 +107,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     ],
     wiring: "live",
     caveats: [
-      "Maintenance emails contractors itself: a quote request (to one firm or up to three at once from Raise a job), the works order, the booking and a cancellation, each with the tenants' names, numbers and the access notes. Tenants and landlords get their own emails at each step when the customer email switch is on.",
+      "Maintenance emails contractors itself: a quote request (to one firm or up to three at once from Raise a job), the works order, the booking and a cancellation, each with the tenants' names, numbers and the access notes. Anyone PayProp holds only as a past tenant is left off. Tenants and landlords get their own emails at each step when the customer email switch is on.",
       "PayProp is read-only to the OS, so marking a job as charged through PayProp records the fact here; the charge is raised in PayProp by hand.",
       "A certificate that comes back from a planned job is filed on the job. Attaching it to the property's compliance file is still done from Compliance.",
     ],
@@ -128,6 +131,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     purpose: "Everyone you can send on a job: who is out today, who is booked in when, and what we owe them.",
     does: [
       "Read the four counts off the live jobs: out today, booked this week, waiting for a date, and what is owed to contractors.",
+      "Add a contractor, top right (Add one in the new look), puts a new firm on the book. Their bank details go on the Bank Details card on their profile, with Edit.",
       "Bookings: today's visits, the next seven days, works orders a contractor has not booked a time for yet, and booked days that went by without the job being marked done.",
       "Contractors: your own book beside the company's. Each row says how many open jobs they have and what they are owed. Open one for their details, their bookings, every job they have done and the money through them.",
       "Log an invoice on a contractor for work with no job on the OS: pick the home, say what it was, the total and their invoice number, and attach the PDF or a photo. It goes on as a finished job and accounts are told.",
@@ -143,12 +147,12 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
 
   "/tools": {
     purpose:
-      "The kit that sits alongside your book, grouped by the job it does. The first group is Prospecting — the doors nobody has knocked on yet.",
+      "The kit that sits alongside your book, grouped by the job it does. The first group is Prospecting - the doors nobody has knocked on yet.",
     does: [
       "See every tool, what it is for, and whether it comes with your package or is bought separately.",
       "Day to Day: Notice Dates (the earliest date a rent increase, a landlord's notice or a tenant's notice can take effect, with the working shown), Calculators, and the Route Planner (your visits for the day, the real drive between each and whether the gaps leave time).",
       "Getting paid: Forecast (where the book lands over the next 12 or 18 months, with dials to try changes) and Generate an Invoice (the fee is worked out from the home's rent and service; check it, produce it with its number, then send it).",
-      "Marketing Pack: social posts, carousels, guides and artwork from marketing, ready to post or send on. Learning: the Guides (how each process works, with pictures) and Systems.",
+      "Marketing Pack: social posts, carousels, guides and artwork from marketing, ready to post or send on (the OS never posts to social media itself). Learning: the Guides (how each process works, with pictures) and Systems.",
       "Open Launch Pad to read the leads from your ads and where each one has got to.",
     ],
     /* Partial rather than shell since 2 Sep: Landlord Radar opens and is
@@ -172,13 +176,13 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "Every enquiry, tenant and landlord, in one book. The two sides are different jobs so they are filtered apart.",
     does: [
       "Switch between Tenant and Landlord from the rail.",
-      "Press + New lead to add one by hand. It saves in the OS immediately; whether it also reaches REX depends on the Create contacts in REX switch.",
-      "Everyone added in the OS is listed above the table under Added here, whether or not REX has them - the ones waiting carry a Push to REX button and the reason they are waiting, the ones that made it carry their REX id.",
+      "Press + New lead to add one by hand. It saves in the OS immediately, and reaches the office records too where that is switched on.",
+      "Anyone added in the OS who has not reached the office records yet is listed above the table under Added here, with a Push button and the reason they are waiting.",
       "Search, and filter by source, agent or stage.",
       "Click a lead to open its drawer, then step through the record with Previous and Next.",
-      "In the drawer, the single next-action button does that step's work — booking a viewing, booking the appraisal, sending the email, recording the offer.",
+      "In the drawer, the single next-action button does that step's work - booking a viewing, booking the appraisal, sending the email, recording the offer.",
       "On a landlord, the last step is Book the appraisal. Pick a day and a time and it creates the appraisal and takes you to its file. Booking the same landlord again moves the appointment rather than making a second one.",
-      "A lead given to the wrong agent: press Not my lead in the drawer (beside Mark as lost) to pass it to the right agent, picked from a list of every agent with the towns their work is in, or Back to the office, where owners and the office see it under Not assigned and give it out. Owners and the office see the same button as Reassign, on any lead. The new agent gets it in their bell and the move goes on the lead's activity. REX still shows the old agent: the move is kept in the OS.",
+      "A lead given to the wrong agent: press Not my lead in the drawer (beside Mark as lost) to pass it to the right agent, picked from a list of every agent with the towns their work is in, or Back to the office, where owners and the office see it under Not assigned and give it out. Owners and the office see the same button as Reassign, on any lead. The new agent gets it in their bell and the move goes on the lead's activity. The office records still show the old agent: the move is kept in the OS.",
       "Guarantors: a tenant lead has a Guarantors box inside The tenant card. Press Add a guarantor for the guarantor's name, email, phone, how they know the applicant, their address, and which applicant they are for. One applicant can have several. They follow the applicant by email onto the let in Applications and the home in Portfolio. Kept in the OS only, not sent to Propoly.",
       "Translate: a customer's message or enquiry that is not in English has a Translate link under it, which shows it in English and names the language. When writing an email, Translate my reply puts the agent's English into their language to check and use. Nothing is sent until the agent presses Send.",
       "Files on an email (where it is switched on for them): in Write an Email, Attach Files adds up to 10 files, 20MB together; the cross takes one off. Up to 3MB together it goes from their own Outlook; over that it goes from The Letting Experts with their address to reply to, and the window says so before Send. Programs (.exe and the like) are refused. To a landlord, Generate Report makes a free two-page Rental Report (their home: what homes its size are advertised for nearby, plus the agent's own early figure if they give one) or Market Report (their area) from the live adverts, for a landlord with no appraisal booked yet. Check It shows the pages, Attach to the Email puts the PDF on, and nothing goes until Send.",
@@ -189,15 +193,16 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
 
   "/market-appraisals": {
     purpose:
-      "Everything between a landlord saying yes to a visit and signing terms — booked, prepared, appraised, won.",
+      "Everything between a landlord saying yes to a visit and signing terms - booked, prepared, appraised, won.",
     does: [
       "Filter by stage using the tab strip: All open, Booked, Pre-appraisal, Appraisal, Post-appraisal, Take-on & photos, AML & compliance.",
-      "Click an appraisal to open its file — the rent guide, the comparables behind it, and what needs doing now.",
+      "Click an appraisal to open its file - the rent guide, the comparables behind it, and what needs doing now.",
       "From the file, Build the presentation makes the deck the landlord opens before you arrive.",
       /* Jade Grewal, 15 Oct 2026, was told terms "go out through REX". They
          do not: this is where they are sent from. */
       "SENDING TERMS OF BUSINESS: open the landlord's appraisal. Once the figure is recorded and the post-appraisal deck is built, the Next up card says Prepare the presentation and sign, which opens Prepare and send. Four steps there, in any order: 1 Look through it (open the booklet - what the landlord will get); 2 Check the details - their home address fills from their record (Change to correct it; if it is blank, type it and press Save their address, or Same as the let property if they live there, or Send without it if they don't have it - the address box on the contract is then left empty), then tick These are right, and the dates are right; 3 Sign your half (Draw up the contract); 4 Send it to the landlord - one email from the agent with the presentation and a link to sign in their own file. Unsigned terms are nudged automatically 2, 5 and 9 days after sending, and Nudge to sign on the appraisal's Next up card chases by hand.",
-      "Change the fees: on the appraisal file (top) or under the tick on Prepare and send, for the service, the management fee, a set-up fee and other fees, with why it changed. The deck and the terms both follow, and terms already drawn up or sent are drawn up again. Not once the landlord has signed.",
+      "Change the fees: on the appraisal file (top) or under the tick on Prepare and send, for the service, the management fee, a set-up fee and other fees, with why it changed. The deck and the terms both follow, and terms already drawn up or sent are drawn up again. Once the landlord has signed, new fees mean new terms: Reissue on New Terms on the listing's Compliance tab, and they replace the old ones once signed. Changing a home's service on The Details asks Do you need to re-sign a new contract? - Yes, send new terms opens them on the new service.",
+      "The terms carry no management start date. In Check the details, the dates are right means Valued on and Visit. A management transfer's take-over date is on the transfer's own page (We take over on).",
       "A brand new home with no appraisal goes through + Add new listing on Listings, whose fifth screen draws up the terms to sign and send the same way.",
     ],
     wiring: "partial",
@@ -208,7 +213,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
          warns about - a caveat sending somebody away to do by hand what the
          screen had quietly started doing. Corrected 14 Sep 2026. */
       "Book an appraisal here when there is no landlord lead behind it yet: the landlord, then the property, then the time, and they become a lead on the way. If they are already a lead it points you to book from that lead instead, so the lead and the appraisal stay one record.",
-      "Stages move on their own, read from the record: the deck sent, the visit passed, the figure recorded, the terms signed, the landlord's documents, the REX listing. Won and Lost are the only moves made by hand.",
+      "Stages move on their own, read from the record: the deck sent, the visit passed, the figure recorded, the terms signed, the landlord's documents, the listing made. Won and Lost are the only moves made by hand.",
       "Booking sends the landlord their confirmation with a calendar file attached, from the public sender with you as reply-to, as long as their record has an email address and Email to customers is on. The file says whether it went.",
       "The appointment goes into your own diary and Outlook. Rearrange or Cancel on the appraisal moves or removes it there too, and Send Again resends the landlord's confirmation.",
       "Won and Lost are their own tabs. A won appraisal's listing carries its landlord, notes, fees and papers across.",
@@ -217,7 +222,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
   },
 
   "/listings": {
-    purpose: "The properties on the market, as a card board — rent, beds, days on market, and what is missing.",
+    purpose: "The properties on the market, as a card board - rent, beds, days on market, and what is missing.",
     does: [
       /* The Available-only switch became a stage tab, and Location is a
          filter rather than a sort - this line described neither by 14 Sep. */
@@ -234,17 +239,24 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "Edit on The Details, on the Overview, changes the rent, deposit, available date, bedrooms, bathrooms, council tax band, type of home, furnishing, type of let and the service. It saves straight to the listing.",
       "Edit the advert, at the top of the page, opens Marketing: edit the portal write-up and press Save. That goes straight out to Rightmove, Zoopla and OnTheMarket - live on the portals in about five to ten minutes. There is nothing else to press afterwards.",
       "Take off the market, at the top of a live listing's page (and in its More options menu): it asks first, then the advert comes off Rightmove, Zoopla and OnTheMarket within the hour. Enquiries, viewings and offers stay on the listing, and Put back on the market, in the same place, puts the advert back up. It is the agent's own press: Steve says where it is and never presses it.",
-      "A draft can go Live without Portals from its More options menu: it moves on to viewings and offers without being advertised.",
+      "A draft can go Live without Portals from its More options menu: it moves on to viewings and offers without being advertised. File this draft away, in the same menu, archives a draft now.",
+      "If Edit the advert says The price the portals print is blank, even though the rent is in, press Set the Price beside it.",
+      "Mark as Let Agreed (where it is switched on) and Back to available sit by Take off the market on a live listing, and in More options. Back to available shows whenever the listing is let agreed. Where Mark as Let Agreed is not there, the office does it. Steve never presses either.",
+      "Make an offer, or Record offer on a past viewing, is how the agent fills in the offer for a tenant who can't do it themselves; each other adult on it has Fill it in for them, or gets their own link once it is saved.",
+      "Gas supply (Gas at the property or No gas supply) is answered on the listing's Compliance tab, as well as on the home's page.",
+      "The landlord's email in the listing's Landlord box opens your own mail app in a new tab, not the OS's Write an Email.",
       "Once a let is in progress, The Advert box on the listing and on the let says whether it is still online. Take Off the Portals takes it down now, in a few short screens that also offer to let the other applicants go and call off booked viewings, or they pick when to be asked: When the holding fee is in, When referencing is done, or I'll decide myself. Nothing comes down by itself.",
       "Open the live advert on Rightmove, Zoopla or OnTheMarket from the Live advert links at the top of the file.",
       "Make an offer, and hand a let property over to Kirstie for pre-tenancy.",
     ],
     wiring: "partial",
     caveats: [
-      "Archived is not a REX state and nothing is deleted: a draft goes there once it has sat two months without being published, along with every listing REX holds that came off the market without a tenant. Bring back to drafts returns one for another two months.",
-      "Pills like No photos and EPC not filed are telling you what REX is missing, not what this screen failed to load.",
-      "A home's address: ask Steve. He changes it in the OS after showing the old and new and a yes - on the managed-home record, or as the OS's own address for a listing - and it shows under the address on the listing and Portfolio pages as Address in the OS. The home's property record in REX is not changed: Steve tells them to change it there too, without naming REX. The push to Propoly uses the OS address for a town or postcode the REX record has blank (never over one REX holds), and says so on the handover run.",
-      "Terms of business are not sent from a listing: the Send terms button under Compliance is not switched on. They go from the landlord's appraisal file, Prepare and send (see Market Appraisals). A listing with no appraisal file behind it (most homes that were on the market before the OS) has no Prepare and send: if its terms already went out and are unsigned, chase them from the Terms to sign tile on the Dashboard - Send reminder emails the landlord from your own mailbox (Customise adds the tile if it is not there). If they hold signed terms, Upload them under Compliance. Otherwise it goes to James.",
+      "Archived is the OS's own list and nothing is deleted: a draft goes there once it has sat two months without being published (or sooner with File this draft away), along with every listing that came off the market without a tenant. Bring back to drafts returns one for another two months.",
+      "Pills like No photos and EPC not filed are telling you what the home's file is missing, not what this screen failed to load.",
+      "A home's address: ask Steve. He changes it in the OS after showing the old and new and a yes - on the managed-home record, or as the OS's own address for a listing - and it shows under the address on the listing and Portfolio pages as Address in the OS. The home's file in the office records is not changed: Steve says the home's file needs the same change. The push to Propoly uses the OS address only for a town or postcode the home's file has blank, never over one it holds, and says so on the handover run.",
+      /* Was "the Send terms button under Compliance is not switched on" - untrue since the terms
+         panel went on every listing's Compliance tab (components/terms/TermsPanel). 25 Nov 2026. */
+      "Terms of Business can be sent from the listing's Compliance tab, with or without an appraisal: Send Terms of Business. Once sent: Send a reminder and Adjust contract. Made but not yet sent (your part to sign): Withdraw and start again. Signed: Reissue on New Terms, and, where it is switched on, Reissue Without Rent & Legal Protection. An appraisal's terms still go from its Prepare and send (see Market Appraisals). Signed on paper: More about the terms, Upload a signed copy.",
       "Live advert links only appear for a property that is actually feeding a portal. No links means the feed is not running, not that the screen failed.",
     ],
     next: "A let property hands over to pre-tenancy.",
@@ -252,21 +264,23 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
 
   "/viewings": {
     purpose:
-      "Every viewing and its whole story — the property, who is coming, whether anyone lives there, and whether the confirmations actually went.",
+      "Every viewing and its whole story - the property, who is coming, whether anyone lives there, and whether the confirmations actually went.",
     does: [
       "Switch between Calendar, Diary and Feedback.",
-      "Feedback groups every viewing that has been by property, with what was said and REX's Hot / Warm / Cold, and Copy for the landlord puts it on the clipboard with no names in it.",
+      "Feedback groups every viewing that has been by property, with what was said and its Hot / Warm / Cold, and Copy for the landlord puts it on the clipboard with no names in it.",
       "Click a viewing for access details, keys, and the comms checklist showing which confirmations were sent.",
       "Record the outcome, starting with whether they turned up, including a No-show.",
       "Push an offer to the landlord, and couple or uncouple applicants.",
-      "Open the Week calendar and click an empty slot to add an appointment.",
+      "New appointment (or click an empty slot on the Week calendar) adds a meeting, an inspection or something personal. It goes in your own Outlook unless you untick it; nobody is invited or emailed.",
+      "Booking a viewing in the five-step window (where it is switched on): the Access step offers Key safe with its code, and shows the home's key numbers. On the Messages step each person to be told has their own on/off switch - turn the tenant off to leave them out.",
     ],
     wiring: "partial",
     caveats: [
-      "Appointments added on the week calendar stay in the OS. They do not reach REX, so REX will not know about them.",
+      "Appointments stay in the OS and your diary. They do not go on the home's file.",
       /* Built 14 Sep - the Feedback view, grouped by property, with a
-         landlord-ready copy. What is left is not ours to build. */
-      "Most viewings have no feedback written up in REX at all - 4 of the last 30. The report shows what is there and names what is missing.",
+         landlord-ready copy. What is left is not ours to build. The "4 of the
+         last 30" figure came out 25 Nov 2026: the map states no figures. */
+      "Most viewings have no feedback written up at all. The report shows what is there and names what is missing.",
     ],
     next: "A viewing that goes well produces an application.",
   },
@@ -279,6 +293,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "Open any email that goes out at that step, and press Email it to me to get it in your own inbox.",
       "Read what the agent does to set the step off, and what is not built yet.",
       "Write what is not right in the box at the bottom; it goes on the list with the step attached.",
+      "To see what the terms look like, the nearest thing to a blank copy: Landlord, Signing the terms, Ready to sign (the sample landlord).",
     ],
     wiring: "live",
     caveats: [
@@ -287,13 +302,19 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
   },
 
   "/applications": {
-    purpose: "Every let in progress: applications on REX's statuses, offers accepted in the OS, and lets that only exist in Propoly, with the pre-tenancy stages once one is accepted.",
+    purpose: "Every let in progress: applications, offers accepted in the OS, and lets that only exist in Propoly, with the pre-tenancy stages once one is accepted.",
     does: [
-      "Read the four-tile pipeline across REX's statuses.",
+      "Read the four-tile pipeline across the application statuses.",
       "Show or hide unsuccessful applications.",
       "Choose your columns.",
       "Click an application for the file and the handover.",
       "On a let's file, the Guarantors box under the applicants lists each applicant's guarantors - carried over from the tenant lead by their email - and Add a guarantor puts on another.",
+      "Push to Propoly stays greyed out until the rent, move-in date, term, service and deposit scheme are filled in and every tenant has an email; the card says what is missing. If Propoly may already hold the home it asks which: Use this one and push, or Create it and push.",
+      "A room let shows a Room box on the push (the room number as Propoly has it): check it before pressing.",
+      "Just after a push, or a deal keyed into Propoly by hand, close the let and open it again: the tag turns green on the next read of Propoly. Pushing again does not make a second deal.",
+      "+ Add landlord on the let's landlord view is always there, even when it has one: it adds another, it never means one is missing. Open The landlord to see who is on it.",
+      "Cancel the deal (the let's Actions, or Things to Do): pick a reason and type the confirmation. It comes off Applications and Kirstie is told on her feed to cancel it in Propoly; Update the tenant and Update the landlord then write an email for the agent to check before it goes. The advert is not touched.",
+      "PLC sent and not yet approved: Resubmit With New Details takes it back to change and send again, or Cancel the PLC. The PLC is not on the phone app yet.",
     ],
     wiring: "live",
     caveats: [
@@ -303,8 +324,8 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "Start the PLC check is the brown button on the let's file once the application is with the landlord or accepted. The how-to guide on handing over the PLC pack has the steps; a pack sent back arrives as a notification with the checker's note.",
       /* Ticket 668c196d, 24 Nov 2026. */
       "On the PLC review, whoever does the first check can leave a note on each check (Add a note under it). A No needs a note before the pack can be passed on. The final approver reads every note under First Check Notes above Final Approval, including notes from before a resubmission. Notes stay with the PLC team: they are never emailed to the agent or the landlord.",
-      "The right-to-rent gap warning is real — it is counting applications with nothing recorded.",
-      "A tenant's right to rent expiry date (or no time limit) is recorded by asking Steve - he puts it on the let after a yes, and it shows on the tenant's Their application card as Right to rent expiry. The office's bell reminds them when the follow-up check is due. A Scottish let has no right to rent, so it shows none and takes none.",
+      "The right-to-rent gap warning is real - it is counting applications with nothing recorded.",
+      "A tenant's right to rent expiry date (or no time limit) is recorded by asking Steve - he puts it on the let after a yes, and it shows on the tenant's Their application card as Right to rent expiry. The follow-up check is due on the later of the expiry or 12 months after the check (the Home Office rule); it cannot be set by hand. The office's bell reminds them when it is due. A Scottish let has no right to rent, so it shows none and takes none.",
     ],
     next: "An accepted application becomes a deal in Propoly and goes to pre-tenancy.",
   },
@@ -315,7 +336,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "Press any of the four tiles to filter the book by that state.",
       "See what is coming out of compliance over the next month, with days left or days over.",
       "Press Book the {trade} on an urgent row to raise a works order.",
-      "Click a property to open its file and upload a certificate.",
+      "Click a property to open its file and upload a certificate. If it says There is more than one home on our books this could be. Which is it?, press the right home's button.",
     ],
     wiring: "partial",
     caveats: [
@@ -326,7 +347,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
          are off until the compliance_chases switch is armed. */
       "Nothing on this screen emails the landlord. Ring or email them yourself, and note it on the property.",
       "Gas and EICR recording only began in November, so the book is thinner than the real position. EPC looks complete because it was bulk imported.",
-      "A renewed certificate overwrites the old one in REX, so this screen cannot tell you what was overdue in the past.",
+      "A renewed certificate replaces the old one on the home's file, so this screen cannot tell you what was overdue in the past.",
     ],
   },
 
@@ -339,13 +360,14 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "See on the visit whether the tenant has confirmed, change the time, or send the confirmation again.",
       "Press Record the visit on the day: the safety checks (alarms, damp, who lives there, meter readings), then each room with Good, Fair or Poor, notes, photos and what happens next, then the write-up.",
       "Send the report to the landlord, with the checks and photos on it, and raise any works orders from the findings.",
+      "A visit done with a report made elsewhere (Inventory Base, say): Record a past visit on the home's page - what it was, the day, who went and the report - then Record it as done. No room checks, nobody emailed. Or add the report on the visit under Report and files.",
     ],
     wiring: "partial",
     caveats: [
       "The cadence - three months then every six - is a sensible guess and has not been signed off by Michael yet. It is a settings document, so it changes without a deploy.",
       /* Built 14 Sep: Raise the works order, on the finding itself. */
       "A finding that asks for a works order carries Raise the works order. Pick the trade and how urgent it is - neither is on the finding, so neither is guessed - and the job opens on Maintenance with the room, the item and what you saw already on it.",
-      "The Due list needs REX for the managed book. Where REX is not connected the screen says so rather than showing an empty board.",
+      "The Due list needs the office records for the managed book. When they cannot be read the screen says so rather than showing an empty board.",
       /* The printable report landed 14 Sep - Print the report on a written-up
          visit. Photographs on a finding are still open. */
       /* Photographs landed 14-15 Sep. The one real gap left is the emailed
@@ -402,7 +424,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     caveats: [
       "Until the team closes move-outs here, the list is the old property management system's own, copied across, so the figures match it. One closed here comes off the list straight away.",
       "A tenancy review recorded as ending lands on this list too, with no move-out day until one is set.",
-      "Closing a move-out does not book the check-out, return the deposit or put the home on the market. Those are still done where they are done today.",
+      "Closing a move-out does not book the check-out or return the deposit by itself. Once notice is in or a Section 8 is served, the home's page has Book the check-out and Re-let this home (Re-let also shows once a move-out is closed as moved out). Re-let opens the new listing screens with the home, rent and service filled in, and asks for the Source if the home has none.",
     ],
   },
 
@@ -416,15 +438,19 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "Open a home for its full page, with the tabs Overview, Tenancy, Compliance, Maintenance, Inspections, Documents and Notes.",
       "Documents, From the Clean Sweep: the papers gathered from the old systems. On a home in their own book an agent sees and opens the tenancy agreement (on a Scottish let often filed as the PRT with its Easy Read Notes), the deposit certificate and prescribed information, the terms of business, the inventory, the landlord registration evidence, the licence and the RRA information sheet, where the home has them. Landlord ID, AML, references, right to rent and guarantor papers stay with the office; the office sees everything.",
       "The Rent box shows the rent PayProp is billing now and whether it has been paid. Who lives there follows PayProp's tenancy running today, so a new flatmate on a renewal shows and somebody who has left drops off.",
-      "Edit on a tenant changes their name, mobile and email. Edit on The Details changes the service, let type, tenancy dates, gas and who lives there.",
+      "Edit on a tenant changes their name, mobile and email. Edit on The Details changes the service, let type, tenancy dates, gas and who lives there. A home with no tenants: someone already living there is added with Edit on The Details; a new let comes through listing, offer and let, and the home shows who is moving in.",
+      "Source (how the landlord came to us) is on the Overview beside the agent and keys; a pick saves straight away. There is no Existing landlord choice: for a landlord already with us pick Personal referral / word of mouth. If it says it isn't switched on, or wouldn't take the Source from their login, the office sets it - don't offer the same pick again.",
+      "Keys, on the home's page and the listing's: each set's tag number, what it is, where it is kept and who has it out. Add a key number records another. Not on the phone app yet.",
+      "Tenant Swap: swap a sharer, add someone or re-reference, then straight on to the PLC check.",
       "Find It (where it is switched on for them): when a home's landlord or a tenant is missing, or has no email or mobile, a Something's Missing Here box sits above the landlords. Find It has Steve look in PayProp, Propoly and the home's file, then show who he found and where, and ask Is This the Right Person? They can't change what he found: Yes, That's Right saves it on the home (only what was blank, nothing sent to anyone), and No sends it to James with where Steve looked. The same offer comes up in Report when they write that a landlord or tenant is missing. Only on a home in their own name; Michael and Kirstie can use it on any home. If they ask Steve to find a missing landlord or tenant, point them at Find It on the home.",
       "The landlord card: Edit their details, add their home address, a second email marked Work or Personal, joint landlords and points of contact, their zero deposit opt-out and which job emails they get. A Scottish home also takes the landlord registration numbers there.",
       "Rent review (a Section 13 rent increase) and Serve notice (Section 8) are on the home's page; Tenant gave notice starts the move-out.",
       "In Scotland a rent rise is not a Section 13. Where the Scottish rent review is switched on, Rent review on a Scottish home opens the prescribed rent-increase notice instead: the notice on the left, four steps on the right (The Tenancy, The New Rent, Why This Rent, Check and Sign). The earliest start date is worked out from today: 48 hours for the email to arrive, then three months' notice. Then Who Gets It and Send: each tenant gets their own email from the agent with the notice attached, it is saved to the home's Documents, accounts are told to amend PayProp, and Michael sees it on Rent Reviews. If the tenancy agreement does not allow notices by email, Download to Print instead.",
       "Book a property visit, or Record a past visit, for the home's inspections. Report a repair raises a job on Maintenance and ends on its works order.",
-      "Email sends the tenants, the landlord or both an email from the home, with any of its certificates or documents attached. Send out logins gives tenants their own account.",
+      "Email and Email Docs send the tenants, the landlord or both an email from the home, with any of its certificates or documents (the inventory, say) attached, and keep it on the record. Send out logins gives tenants their own account.",
       "Move a home to another agent, Use as a case study, and (compliance and owners) Archive this home once we no longer look after it.",
-      "Take on a home brings in one we are taking over from another agent, with its sitting tenants.",
+      "Take on a home brings in one we are taking over from another agent, with its sitting tenants. A transfer has no Start the PLC check; where the PLC pack asks for references, management transfer, tenants already living there is the reason to give.",
+      "A home let through the OS joins Portfolio at move-in. Before that it is not a take-on: check the let on Applications and its Propoly tag rather than using Take on a home.",
       "A room of a shared house the OS doesn't show yet (the house has four rooms and Portfolio lists three): Take on a home with the address written as 'Room 4, 32 Example Road' and the house's postcode. It joins the house it belongs to as a new room. It does NOT make a second copy of the house.",
       "A management transfer saved on the wrong room: open the transfer (the Management transfer button on that room) and press Move to Another Room. Pick a room of the house, or A Room That Isn't Listed and its number. Everything on the transfer moves, the room it was on is left free, and nothing is sent to anyone. Once the office has sent a transfer on to Propoly, only the office can change its room.",
       "The three charts of the book (service, town, rent) are on the PM Dashboard (/overview); pressing a slice opens Portfolio filtered to it.",
@@ -439,8 +465,12 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
 
   "/finances": {
     purpose:
-      "Fee income on the accounts' own basis — a fee belongs to the month its batch transferred, net of VAT.",
-    does: ["Read your own board of finance tiles.", "Customise the board tile by tile."],
+      "Fee income on the accounts' own basis - a fee belongs to the month its batch transferred, net of VAT.",
+    does: [
+      "Read your own board of finance tiles.",
+      "Customise the board tile by tile.",
+      "Statement, top right: pick This month, Last month, Tax year, Calendar year or Custom, then Download PDF.",
+    ],
     wiring: "live",
     caveats: [
       "Partner joining fees run through a separate bank account, so they are not here and never will be.",
@@ -476,7 +506,7 @@ export function labelFor(route: AgentRoute): string {
 export function screensSection(): string {
   const body = AGENT_ROUTES.map((route) => {
     const s = SCREENS[route];
-    const lines = [`### ${labelFor(route)} — ${route}`, s.purpose];
+    const lines = [`### ${labelFor(route)} - ${route}`, s.purpose];
 
     if (s.does.length) {
       lines.push("", "What you can do here:", ...s.does.map((d) => `   · ${d}`));
@@ -497,8 +527,8 @@ export function screensSection(): string {
   return `## The screens, and what actually works on each
 
 Every screen below is one an ordinary agent can reach from the rail. When you
-name one, write it as a markdown link using EXACTLY the path given — for
-example [Market Appraisals](/market-appraisals) — because those become buttons
+name one, write it as a markdown link using EXACTLY the path given - for
+example [Market Appraisals](/market-appraisals) - because those become buttons
 that take the person straight there. Never invent a path that is not on this
 list; a button that goes nowhere is worse than no button.
 

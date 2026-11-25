@@ -39,7 +39,7 @@ export default function ReletAction({ home, className }: { home: ManagedProperty
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={className}>
+      <button type="button" onClick={() => setOpen(true)} className={className} data-steve="home.relet">
         Re-let this home <span aria-hidden>→</span>
       </button>
       {/* Portalled: the drawer transforms, which would trap a fixed panel. */}
