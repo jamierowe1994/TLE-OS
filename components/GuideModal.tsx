@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
+import GuideSheet from "@/components/new-look/GuideSheet";
 import type { Guide, GuideStep } from "@/lib/guide-types";
+import { useNewLook } from "@/lib/use-new-look";
 
 /**
  * A guide, as a pop-up that reads like an article.
@@ -29,7 +31,15 @@ const PROSE = "text-[15.5px] leading-[1.75] text-ink/85";
 
 type Zoom = { src: string; title: string };
 
+/** The "guides" switch (lib/new-look) picks the house-style sheet; off, the pop-up below. */
 export default function GuideModal({ g, onClose }: { g: Guide; onClose: () => void }) {
+  const fresh = useNewLook("guides");
+  /* null for the first frame, while the switch is read: draw neither, so the old pop-up never flashes first. */
+  if (fresh === null) return null;
+  return fresh ? <GuideSheet g={g} onClose={onClose} /> : <ClassicGuideModal g={g} onClose={onClose} />;
+}
+
+function ClassicGuideModal({ g, onClose }: { g: Guide; onClose: () => void }) {
   const path = usePathname();
   const scroller = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0);
@@ -117,6 +127,17 @@ export default function GuideModal({ g, onClose }: { g: Guide; onClose: () => vo
               <h1 className="mt-3 text-[30px] font-bold leading-[1.08] sm:text-[40px]">{g.title}</h1>
               <p className="mt-4 text-[17px] leading-relaxed text-muted sm:text-[18.5px]">{g.blurb}</p>
             </header>
+
+            {g.short?.length ? (
+              <aside className="mx-auto mt-7 max-w-[680px] rounded-2xl bg-accent-soft px-5 py-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-accent-dark">The Short Version</p>
+                <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-[15px] leading-relaxed">
+                  {g.short.map((line, i) => (
+                    <li key={i}>{line}</li>
+                  ))}
+                </ol>
+              </aside>
+            ) : null}
 
             {cover ? (
               <Figure

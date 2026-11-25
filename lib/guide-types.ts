@@ -49,6 +49,12 @@ export type Guide = {
    */
   cover?: string;
   coverCaption?: string;
+  /**
+   * The Short Version: three or four lines, each a whole sentence, that are
+   * the guide for anybody who reads nothing else (James, 25 Nov 2026: "super
+   * easy to get your head around"). Shown under the blurb.
+   */
+  short?: string[];
   /** The opening paragraph, under the cover, before the first section. */
   intro?: string;
   steps: GuideStep[];

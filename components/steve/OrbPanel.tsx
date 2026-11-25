@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import SteveFace from "@/components/SteveFace";
 import { whenAgo } from "@/lib/lead-spine";
+import { openGuide } from "@/lib/guide-sheet";
 
 /**
  * Steve's chat card when he is the orb (lib/new-look "orb"), James 25 Oct
@@ -65,6 +66,12 @@ const ICON = {
    because that file reads the database and this one runs in the browser. */
 const KIND: Record<string, string> = { announcement: "Announcement", release: "New in the OS", reminder: "Reminder" };
 const kindLabel = (kind: string) => KIND[kind] ?? "News";
+
+/* A news link like /portfolio?walkthrough=steve-find names a guide (components/GuideLayer). */
+const guideIn = (link: string): string | null => {
+  const m = /[?&]walkthrough=([\w-]+)/.exec(link);
+  return m ? m[1] : null;
+};
 
 export default function OrbPanel(p: {
   aName: string;
@@ -243,8 +250,21 @@ export default function OrbPanel(p: {
               </p>
               <div className="sv-article-text">{article.body}</div>
               {article.link && (
-                <a href={article.link} className="sv-article-go" target={article.link.startsWith("/") ? undefined : "_blank"} rel="noreferrer">
-                  Read more
+                <a
+                  href={article.link}
+                  className="sv-article-go"
+                  target={article.link.startsWith("/") ? undefined : "_blank"}
+                  rel="noreferrer"
+                  onClick={(e) => {
+                    /* A post pointing at a guide opens it over the screen they're on, rather than taking them away. */
+                    const guide = guideIn(article.link);
+                    if (!guide) return;
+                    e.preventDefault();
+                    close();
+                    openGuide(guide);
+                  }}
+                >
+                  {guideIn(article.link) ? "Read the Guide" : "Read more"}
                   <I d={ICON.send} size={15} />
                 </a>
               )}

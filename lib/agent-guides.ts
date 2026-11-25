@@ -39,6 +39,61 @@ const img = (name: string) => `/guides/agents/${name}.webp`;
 
 export const AGENT_GUIDES: Guide[] = [
   {
+    /* James, 25 Nov 2026: the first News post points here. Pictures on the
+       invented home (Flat 2, 14 Example Road) in the new look. */
+    id: "steve-find",
+    title: "Let Steve Find What's Missing",
+    blurb:
+      "When a landlord's or tenant's email or mobile is missing on one of your homes, you no longer need to wait for James. Steve looks for it, shows you what he found, and you say yes or no.",
+    icon: "search",
+    href: "/portfolio",
+    minutes: 2,
+    cover: img("sf-home-find"),
+    coverCaption: "A blank box on a home now says what is missing, with Find It underneath.",
+    short: [
+      "Press Find It on a blank box on the home, or tell Steve in a report.",
+      "Steve shows you who he found and where he found them. You can only say yes or no.",
+      "Yes saves it on the home straight away. Nothing is sent to anyone.",
+      "No, or nothing found, goes to James with where Steve looked.",
+    ],
+    steps: [
+      {
+        title: "Press Find It",
+        body: "Open the home. If the landlord or a tenant is missing an email or a mobile, a note sits above the people saying exactly what is missing. Press Find It.",
+        why: "A missing email means no certificates, no updates and no signing, so it is worth fixing the moment you spot it.",
+      },
+      {
+        title: "Or Tell Steve in a Report",
+        body: "You can also open Steve, press Report and say what is missing, for example: the tenant's email is missing. Before the report goes anywhere, Steve offers Let Steve Find It. Press it.",
+        image: img("sf-report"),
+      },
+      {
+        title: "Is This the Right Person?",
+        body: "Steve takes a few seconds to look in PayProp, Propoly and the home's file. He then shows you who he found: their name, their email and mobile, where he found them, and what it will add to the home. Nothing on the card can be typed over or changed.",
+        image: img("sf-card"),
+        why: "Read the name before you press. If it is the right person with the wrong details, or the wrong person, say no.",
+        how: "Steve only shows somebody when the places he looks agree. If two of them disagree, he shows nothing rather than guess.",
+      },
+      {
+        title: "Yes, That's Right",
+        body: "Press Yes, That's Right and the details go on the home there and then. The box fills in and the note goes away. There is nothing else to do and nobody to wait for.",
+        image: img("sf-done"),
+        how: "Steve only ever fills in what is blank. He never changes an email or a mobile that is already there.",
+        sends: "Nothing. No email or text goes to the landlord or the tenant. The details are saved on the home in the OS, and James can see what was filled in.",
+      },
+      {
+        title: "No, or Nothing Found",
+        body: "If you press No, Send It to James, or Steve could not find anybody he was sure of, it goes to James as a report. It already says where Steve looked and what he found, so James does not have to start again.",
+        image: img("sf-none"),
+        sends: "A report to James, inside the OS. Nothing goes to the landlord or the tenant.",
+      },
+      {
+        title: "Your Own Homes Only",
+        body: "Find It works on the homes in your name. On somebody else's home, Steve says so and passes it to James instead.",
+      },
+    ],
+  },
+  {
     id: "agent-plc",
     title: "Handing Over the PLC Pack",
     blurb:

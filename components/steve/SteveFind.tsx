@@ -24,6 +24,9 @@ type Phase =
   | { at: "saved"; home: string; saved: number }
   | { at: "failed"; error: string };
 
+/** "PayProp, Propoly and the home's file", not "PayProp, Propoly, the home's file". */
+const andList = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : xs[0] ?? "");
+
 const ADDS: Record<FoundPerson["adds"][number], string> = { name: "name", email: "email", phone: "mobile" };
 
 export function outcomeOf(answer: FindAnswer | null, said: "no" | "nothing"): FindOutcome | undefined {
@@ -145,7 +148,7 @@ export default function SteveFind({
           <>
             <p className="sv-fix-h">I Couldn't Find It</p>
             <p className="sv-fix-p">
-              {answer.why || `I looked in ${answer.looked.join(", ") || "PayProp, Propoly and the home's file"} and found nothing I could be sure of.`} I'll tell James where I looked.
+              {answer.why || `I looked in ${andList(answer.looked) || "PayProp, Propoly and the home's file"} and found nothing I could be sure of.`} I'll tell James where I looked.
             </p>
             <div className="sv-find-acts">
               <button type="button" className="sv-find-yes" onClick={() => onSend(outcomeOf(answer, "nothing"))}>
