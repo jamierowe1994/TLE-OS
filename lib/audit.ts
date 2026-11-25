@@ -154,6 +154,8 @@ export type AuditKind =
      copy taken, and the kept changes sent on (or stopped) once it was back. */
   | "rex_status_changed"
   | "rex_snapshot_taken"
+  /* Took Steve's offer on the report form instead of sending (25 Nov 2026). */
+  | "report_put_right"
   | "rex_queue_sent"
   | "rex_queue_stopped"
   /* Claude refused for credit or the key (22 Oct 2026, lib/ai-outage): one

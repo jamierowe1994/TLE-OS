@@ -64,6 +64,7 @@ export default function Tickets() {
      it runs on, live once the routine is wired up on Railway. canPush: Push
      It Live can merge Claude's fix itself, once GitHub's key is there too. */
   const [claude, setClaude] = useState<{ canSend: boolean; ready: boolean; canPush: boolean }>({ canSend: false, ready: false, canPush: false });
+  const [putRight, setPutRight] = useState<{ edit: number; ask: number; find: number; sentAnyway: number } | null>(null);
   const [claudeSaid, setClaudeSaid] = useState<Record<string, string>>({});
   const [pushSaid, setPushSaid] = useState<Record<string, string>>({});
   const [show, setShow] = useState<"open" | "later" | "all">("open");
@@ -72,8 +73,9 @@ export default function Tickets() {
   const load = () =>
     fetch("/api/bugs", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((j: { bugs: Bug[]; claude?: { canSend: boolean; ready: boolean; canPush?: boolean } }) => {
+      .then((j: { bugs: Bug[]; claude?: { canSend: boolean; ready: boolean; canPush?: boolean }; putRight?: { edit: number; ask: number; find: number; sentAnyway: number } | null }) => {
         setBugs(j.bugs);
+        setPutRight(j.putRight ?? null);
         if (j.claude) setClaude({ canSend: j.claude.canSend, ready: j.claude.ready, canPush: Boolean(j.claude.canPush) });
       })
       .catch(() => setErr("Couldn't load the tickets."));
@@ -187,7 +189,7 @@ export default function Tickets() {
   if (look) {
     return (
       <TicketsNew
-        state={{ people, auto, pick, counts, laterCount, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict, claude, claudeSaid, sendToClaude, pushSaid, pushClaude }}
+        state={{ people, auto, pick, counts, laterCount, putRight, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict, claude, claudeSaid, sendToClaude, pushSaid, pushClaude }}
       />
     );
   }

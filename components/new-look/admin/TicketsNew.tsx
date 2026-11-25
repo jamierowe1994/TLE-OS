@@ -52,6 +52,8 @@ type Ready = {
   counts: Record<"A" | "B" | "C" | "none", number>;
   /** Tickets put off with Review Later whose day has not come. */
   laterCount: number;
+  /** Steve's offer on the report form taken this week (app/api/bugs/offer), and reports sent anyway after one. */
+  putRight: { edit: number; ask: number; find: number; sentAnyway: number } | null;
   show: "open" | "later" | "all";
   setShow: (v: "open" | "later" | "all") => void;
   letter: Letter;
@@ -126,10 +128,20 @@ const sorted = (b: Bug): { label: string; why: string } | null => {
   if (!sort) return null;
   const why = ctxText(b, "sortWhy");
   if (b.botState === "steve_answered") return { label: "Steve Answered", why: "" };
+  if (sort === "repeat") return { label: "Same as an Open Ticket", why: ctxText(b, "repeatOf") ? `#${ctxText(b, "repeatOf").slice(0, 8)}` : "" };
   if (ctxText(b, "sortSentAt") && !ctxText(b, "sortSendError")) return { label: "Sent to Claude by Itself", why: "" };
   if (sort === "find" && ctxText(b, "sortPointedAt")) return { label: "Pointed to Find It", why: "" };
   const held = ctxText(b, "sortSendError") ? `Claude didn't take it: ${ctxText(b, "sortSendError")}` : ctxText(b, "sortHeld") || ctxText(b, "sortError");
   return { label: "Left for You", why: [why, held].filter(Boolean).join(". ") };
+};
+
+/* Plain counts, no guesses: a press is not proof it was sorted, so the
+   reports that came anyway are said beside it. */
+const putRightLine = (p: { edit: number; ask: number; find: number; sentAnyway: number }) => {
+  const took = p.edit + p.ask + p.find;
+  if (!took && !p.sentAnyway) return "This week nobody has taken Steve's offer on the report form yet.";
+  const parts = [p.edit && `${p.edit} used the Edit button`, p.ask && `${p.ask} asked Steve`, p.find && `${p.find} let Steve find it`].filter(Boolean).join(", ");
+  return `This week ${took} took Steve's offer instead of sending a report${parts ? ` (${parts})` : ""}. ${p.sentAnyway} sent one anyway after an offer.`;
 };
 
 /** "kirstie.mulholland@…" to "Kirstie", for "Kirstie is told when it does". */
@@ -207,7 +219,7 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
       </Tab>
     );
   }
-  const { people, auto, pick, counts, laterCount, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict, claude, claudeSaid, sendToClaude, pushSaid, pushClaude } = state;
+  const { people, auto, pick, counts, laterCount, putRight, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict, claude, claudeSaid, sendToClaude, pushSaid, pushClaude } = state;
   const open = (b: Bug) => b.state === "open" || b.state === "ack";
   const withClaude = (b: Bug) => open(b) && b.botState === "with_claude";
   /* Back from Claude with something for James: a fix to push, a question, or
@@ -558,6 +570,8 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
   return (
     <Tab>
       <p className="nl-meta nl-adm-lede">What people raise. A is broken, C is a recommendation, B is everything else; an idea is a C the moment it lands. Change a letter by pressing it. Send to Claude hands a ticket to Claude, and it comes back here with a fix to push, a question or an answer.</p>
+
+      {putRight && <p className="nl-meta">{putRightLine(putRight)}</p>}
 
       <ul className="nl-adm-figs" aria-label="Open tickets by letter">
         {(["A", "B", "C", "none"] as const).map((k) => (

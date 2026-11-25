@@ -1589,6 +1589,12 @@ function Dock() {
     }, dropped ? 6000 : 2400);
   }
 
+  /* Counted, so Admin > Tickets can say how often the offer stopped a
+     ticket (app/api/bugs/offer). Never waited on, never in the way. */
+  function tookOffer(kind: "edit" | "ask" | "find", guide?: string) {
+    void fetch("/api/bugs/offer", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind, guide, path }) }).catch(() => {});
+  }
+
   /**
    * The report form's main button (lib/report-deflect). With an offer on
    * screen it does what the offer says; with none it sends. Pressed inside
@@ -1604,9 +1610,9 @@ function Dock() {
       (now?.kind !== "edit" || offer?.kind !== "edit" || now.guide === offer.guide) &&
       (now?.kind !== "find" || offer?.kind !== "find" || now.who === offer.who);
     if (!same) setOffer(now);
-    else if (offer?.kind === "find") setFinding({ who: offer.who });
-    else if (offer?.kind === "edit") showEdit(offer.guide);
-    else if (offer?.kind === "ask") void askFirst();
+    else if (offer?.kind === "find") { tookOffer("find"); setFinding({ who: offer.who }); }
+    else if (offer?.kind === "edit") { tookOffer("edit", offer.guide); showEdit(offer.guide); }
+    else if (offer?.kind === "ask") { tookOffer("ask"); void askFirst(); }
     else void sendFeedback();
   }
 

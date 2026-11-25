@@ -33,7 +33,7 @@ import { findableFor } from "@/lib/steve-find-shared";
 import type { Scope } from "@/lib/scope";
 import type { OsUser } from "@/lib/users";
 
-export type Sort = "ask" | "find" | "bug" | "james";
+export type Sort = "ask" | "find" | "bug" | "james" | "repeat";
 
 /** At most this many sent to Claude by the sorter, across the OS, in any 24 hours. */
 export const AUTO_SENDS_A_DAY = 5;
@@ -79,7 +79,7 @@ const JAMES_TOPICS: Array<{ why: string; words: RegExp }> = [
       "i"
     ),
   },
-  { why: "about signing in or access", words: /\b(?:sign(?:ed|ing)? ?(?:in|on|out)|log(?:ged|ging)? ?(?:in|on|out)|login|logon|password|passcode|locked out|lock(?:ed)? (?:me|us|them) out|permissions?|access|admin rights|two[- ]factor|2fa|mfa|invite[ds]?|invitation|authenticat\w*)\b/i },
+  { why: "about signing in or access", words: /\b(?:sign(?:ed|ing)? ?(?:in|on|out)|log(?:ged|ging)? ?(?:in|on|out)|login|logon|password|passcode|locked out|lock(?:ed)? (?:me|us|them) out|permissions?|(?:no|lost|get|give|need|request(?:ed)?|grant(?:ed)?|my) access|access (?:rights|levels?|to (?:the )?(?:os|tle|system|account))|admin rights|two[- ]factor|2fa|mfa|invite[ds]?|invitation|authenticat\w*)\b/i },
   { why: "about deleting", words: /\b(?:delet(?:e|ed|es|ing)|remov(?:e|ed|es|ing)|get rid of|got rid of|erase[ds]?|wipe[ds]?)\b/i },
 ];
 /* What customers are sent, the other way round: a sending word AND a customer
@@ -116,6 +116,18 @@ const BROKEN = new RegExp(
     String.raw`\b(?:500|502|503|504|404)\b`,
     String.raw`\bstopped working\b`,
     String.raw`\b${NOT} (?:\w+ )?(?:load(?:s|ing|ed)?|sav(?:e|es|ed|ing)|work(?:s|ing|ed)?|open(?:s|ing|ed)?|submit(?:s|ting|ted)?|upload(?:s|ing|ed)?|refresh(?:es|ing)?|respond(?:s|ing)?|go(?:es)? through|went through)\b`,
+    /* How faults are really described (25 Nov 2026, from 365 reports): a
+       detail that doesn't come across, a home that vanished, a button that
+       won't let them, a tile whose number the list doesn't bear out. */
+    String.raw`\b${NOT} (?:\w+ ){0,2}(?:pull(?:s|ing|ed)?|carr(?:y|ies|ying|ied)|map(?:s|ping|ped)?|sync(?:s|ing|ed)?|transfer(?:s|ring|red)?|com(?:e|es|ing)|came|filter(?:s|ing|ed)?) (?:through|across|over|in)\b`,
+    String.raw`\b${NOT} (?:\w+ ){0,2}(?:showing|appearing|updating|updated|recogni[sz](?:e|es|ed|ing)|accept(?:s|ed|ing)?|connect(?:s|ed|ing)?|click(?:able)?)\b`,
+    String.raw`\b(?:has |have )?(?:disappeared|vanished)\b`,
+    String.raw`\b(?:wo ?n'?t|will not|does ?n'?t|doesnt) (?:let|allow) (?:me|us|them|you)\b`,
+    String.raw`\b(?:can ?n'?t|cannot|can not|unable to) (?:click|press|select|tick|approve|upload|save|submit|attach|add|instruct|push|amend|change)\b`,
+    String.raw`\bnothing (?:is )?(?:happening|happens|comes? up|came up|appears|shows|loads)\b`,
+    String.raw`\bstill (?:showing|appearing|saying|says|getting)\b`,
+    String.raw`\b(?:reverts?|reverted|jumps? around|goes nowhere)\b`,
+    String.raw`\b(?:says|shows?|showing|states?) \d+\b.{0,80}\b(?:click|open|nothing|can'?t see|none|empty|don'?t come up|doesn'?t come up)`,
   ].join("|"),
   "i"
 );
@@ -194,6 +206,8 @@ export async function sortNewTicket(
     const { hasDb } = await import("@/lib/db");
     if (!hasDb() || t.kind === "auto" || !reporter.id) return;
     if (!(await sorterOn())) return;
+    /* The same report again: put with the first, never sent on twice. */
+    if (await linkRepeat(t, reporter)) return;
     const deflect = t.context?.deflect as { offered?: unknown } | undefined;
     const s = sortOf({ body: t.body, path: t.path, kind: t.kind, byPerson: true, turnedDown: typeof deflect?.offered === "string" ? deflect.offered : null });
     if (!s) return;
@@ -205,6 +219,86 @@ export async function sortNewTicket(
     console.error("[ticket-sort]", t.id, e instanceof Error ? e.message : e);
     await putCtx(t.id, { sortError: (e instanceof Error ? e.message : String(e)).slice(0, 300) }).catch(() => null);
   }
+}
+
+/* ── The same report twice ──────────────────────────────────────────────
+ *
+ * Measured on 365 reports (25 Nov 2026): a home with five tickets is nearly
+ * always five different problems, so a repeat is judged by the words, not
+ * the home. Same record (its screen's address), within a fortnight, and at
+ * least a quarter of the meaningful words shared. That caught the three
+ * genuine repeats in 75 days and nothing else. */
+
+const REPEAT_DAYS = 14;
+const REPEAT_ALIKE = 0.25;
+const STOP = new Set(
+  "the a an is it to of and in on for this that my me we our not but be are was has have there its can cant with as at from so if or do does doesnt dont please what when where why how still also just been any all which they them new one again".split(" ")
+);
+
+export function recordKey(path: string): string | null {
+  const m = /^\/(listings|applications|portfolio|maintenance|market-appraisals|pre-tenancy\/plc|plc)\/([^/?#]+)/.exec(path || "");
+  return m && !/^(new|start|dashboard)$/.test(m[2]) ? `/${m[1]}/${m[2]}` : null;
+}
+
+const meaningful = (text: string) =>
+  new Set(text.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
+
+/** How alike two reports read, 0 to 1 (shared meaningful words over all of them). */
+export function alike(a: string, b: string): number {
+  const wa = meaningful(a);
+  const wb = meaningful(b);
+  const shared = [...wa].filter((w) => wb.has(w)).length;
+  return shared / Math.max(1, new Set([...wa, ...wb]).size);
+}
+
+async function linkRepeat(
+  t: { id: string; body: string; path: string },
+  reporter: Reporter
+): Promise<boolean> {
+  const key = recordKey(t.path);
+  if (!key || t.body.trim().length < 8) return false;
+  const { q } = await import("@/lib/db");
+  const earlier = await q<{ id: string; body: string; state: string; created_at: Date; fix: string | null }>(
+    `SELECT id, body, state, created_at, context->>'fixStory' AS fix FROM os_bugs
+      WHERE id <> $1 AND coalesce(kind, '') NOT IN ('auto', 'idea') AND state IN ('open', 'fixed')
+        AND (path = $2 OR path LIKE $2 || '?%' OR path LIKE $2 || '/%')
+        AND created_at > NOW() - make_interval(days => $3)
+      ORDER BY created_at DESC LIMIT 20`,
+    [t.id, key, REPEAT_DAYS]
+  );
+  const hit = earlier.find((e) => alike(e.body ?? "", t.body) >= REPEAT_ALIKE);
+  if (!hit) return false;
+  const when = new Date(hit.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "Europe/London" });
+  /* Fixed already: say what changed, then sort it as usual - still
+     happening after a fix is a fault worth a fresh look. */
+  if (hit.state === "fixed") {
+    await putCtx(t.id, { repeatOf: hit.id, repeatOfFixed: true });
+    if (hit.fix) {
+      const { logLine } = await import("@/lib/assistant-log");
+      await logLine({
+        userId: reporter.id,
+        userEmail: reporter.email,
+        thread: "ticket",
+        role: "assistant",
+        text: [`About what you reported: "${short(t.body)}"`, "", `Something very like it was reported on ${when} and fixed: ${short(hit.fix, 600)}`, "", "If it's still happening, yours is with James and will be looked at again."].join("\n"),
+        path: t.path,
+        kind: "ask",
+      });
+    }
+    return false;
+  }
+  await putCtx(t.id, { sort: "repeat", sortWhy: "the same as an open ticket", sortAt: new Date().toISOString(), repeatOf: hit.id });
+  const { logLine } = await import("@/lib/assistant-log");
+  await logLine({
+    userId: reporter.id,
+    userEmail: reporter.email,
+    thread: "ticket",
+    role: "assistant",
+    text: [`About what you reported: "${short(t.body)}"`, "", `This looks like the one sent on ${when} ("${short(hit.body, 120)}"), which is already being looked at. I've put yours with it, so you'll hear when it's sorted.`].join("\n"),
+    path: t.path,
+    kind: "ask",
+  });
+  return true;
 }
 
 /* ── ask: Steve answers it, in their chat ──────────────────────────────── */

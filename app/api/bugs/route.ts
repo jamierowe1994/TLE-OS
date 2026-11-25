@@ -110,6 +110,29 @@ export async function PUT(req: NextRequest) {
   return NextResponse.json({ ok: done });
 }
 
+/* How often Steve's offer on the report form was taken this week, and how
+   many of those people sent the report anyway (app/api/bugs/offer). */
+async function putRightThisWeek(): Promise<{ edit: number; ask: number; find: number; sentAnyway: number } | null> {
+  const { hasDb, q } = await import("@/lib/db");
+  if (!hasDb()) return null;
+  try {
+    const [taken, anyway] = await Promise.all([
+      q<{ k: string; n: string }>(
+        `SELECT split_part(detail, '|', 1) AS k, count(*)::text AS n FROM os_audit
+          WHERE kind = 'report_put_right' AND at > NOW() - INTERVAL '7 days' GROUP BY 1`
+      ),
+      q<{ n: string }>(
+        `SELECT count(*)::text AS n FROM os_bugs
+          WHERE created_at > NOW() - INTERVAL '7 days' AND coalesce(kind, '') <> 'auto' AND context ? 'deflect'`
+      ),
+    ]);
+    const n = (k: string) => Number(taken.find((r) => r.k === k)?.n ?? 0);
+    return { edit: n("edit"), ask: n("ask"), find: n("find"), sentAnyway: Number(anyway[0]?.n ?? 0) };
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(req: NextRequest) {
   /* Your own reports, and where each has got to. Any signed-in person, and
      only ever the ACTOR's: a view-as must not show somebody else's. */
@@ -125,6 +148,7 @@ export async function GET(req: NextRequest) {
      whether Push It Live can merge Claude's fix itself (lib/github-pr). */
   return NextResponse.json({
     bugs: await bugs(200),
+    putRight: await putRightThisWeek(),
     claude: { canSend: maySendToClaude(owner.email), ready: claudeConfigured(), canPush: maySendToClaude(owner.email) && githubConfigured() },
   });
 }

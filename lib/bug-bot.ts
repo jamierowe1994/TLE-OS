@@ -288,8 +288,29 @@ function quietWhenFixed(email: string): boolean {
  * The person who reported it hears it is fixed - once, and only a person.
  * An automatic bug has nobody to tell.
  */
+/**
+ * The same report sent again while the first was open (lib/ticket-sort
+ * linkRepeat, 25 Nov 2026) was promised "you'll hear when it's sorted". It
+ * is sorted when the first is: each open repeat is closed with the first
+ * one's fix story and its reporter told the usual way.
+ */
+async function closeRepeatsOf(id: string, origin: string): Promise<void> {
+  const fixed = await q<{ fix: string | null }>(`SELECT context->>'fixStory' AS fix FROM os_bugs WHERE id = $1 AND state = 'fixed'`, [id]);
+  if (!fixed[0]) return;
+  const repeats = await q<{ id: string }>(
+    `UPDATE os_bugs SET state = 'fixed',
+            context = coalesce(context, '{}'::jsonb) || CASE WHEN $2::text IS NULL OR coalesce(context, '{}'::jsonb) ? 'fixStory' THEN '{}'::jsonb ELSE jsonb_build_object('fixStory', $2::text) END
+                      || jsonb_build_object('closedWithRepeatOf', now()::text)
+      WHERE state = 'open' AND context->>'repeatOf' = $1 AND id <> $1
+      RETURNING id`,
+    [id, fixed[0].fix]
+  );
+  for (const r of repeats) await tellReporter(r.id, origin).catch(() => false);
+}
+
 export async function tellReporter(id: string, origin: string): Promise<boolean> {
   if (!hasDb()) return false;
+  await closeRepeatsOf(id, origin).catch((e) => console.warn("[bug-bot] repeats of", id, e));
   const rows = await q<{ reporter_email: string; body: string; path: string; kind: string; told_at: Date | null; context: Record<string, unknown> | null }>(
     `SELECT reporter_email, body, path, kind, told_at, context FROM os_bugs WHERE id = $1`,
     [id]
