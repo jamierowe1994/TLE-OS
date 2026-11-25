@@ -103,7 +103,9 @@ async function fellThrough(id: string, address: string): Promise<{ on: string | 
   const [decisions, cancels] = await Promise.all([decisionsForListing(id), allCancellations()]);
   /* Cancelled here: an offer accepted on this listing whose let was cancelled. */
   const accepted = [...decisions.entries()].filter(([, d]) => d.decision === "accepted").map(([ref]) => ref);
-  const here = cancels.find((c) => accepted.includes(c.ref));
+  /* A REX offer's decision is kept as rex:<id>, its cancellation as the bare
+     id (Sean McMahon, ticket c3f19197, 25 Nov 2026): read both ways. */
+  const here = cancels.find((c) => accepted.includes(c.ref) || accepted.includes(`rex:${c.ref}`));
   if (here) return { on: here.at.slice(0, 10), why: [here.reason, here.note].filter(Boolean).join(": ") || null, tenants: null };
   const gone = await fellThroughOnHome(address);
   if (!gone) return null;
