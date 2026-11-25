@@ -8,6 +8,7 @@ import AdvertOffline from "@/components/listing/AdvertOffline";
 import DoodleIcon from "@/components/DoodleIcon";
 import { isWatched, PORTAL_SENT_EVENT, PORTAL_WATCH_EVENT, portalList, TAKING_A_WHILE, watchPortalSend } from "@/lib/portal-watch";
 import SignInAgain from "@/components/SignInAgain";
+import StillOnPortals from "@/components/listing/StillOnPortals";
 import WithdrawnBox from "@/components/listing/WithdrawnBox";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import PhotoLightbox from "@/components/PhotoLightbox";
@@ -517,7 +518,7 @@ function ListingDrawerBody({
 
   /* Where it really is, live from REX. The book is cached for minutes, and
      straight after a push it would still say draft. */
-  const [pub, setPub] = useState<{ status: string | null; onPortals: boolean; blockers: string[]; sending?: boolean } | null>(null);
+  const [pub, setPub] = useState<{ status: string | null; onPortals: boolean; blockers: string[]; sending?: boolean; neverTold?: boolean } | null>(null);
   /* Read again after a withdrawn listing is relisted or taken off (WithdrawnBox). */
   const [pubKey, setPubKey] = useState(0);
   const reloadPub = () => setPubKey((k) => k + 1);
@@ -528,8 +529,8 @@ function ListingDrawerBody({
     let live = true;
     fetch(`/api/listings/publish?id=${encodeURIComponent(String(listing.id))}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; status?: string | null; onPortals?: boolean; blockers?: string[]; sending?: boolean }) => {
-        if (live && j.ok) setPub({ status: j.status ?? null, onPortals: Boolean(j.onPortals), blockers: j.blockers ?? [], sending: Boolean(j.sending) });
+      .then((j: { ok?: boolean; status?: string | null; onPortals?: boolean; blockers?: string[]; sending?: boolean; neverTold?: boolean }) => {
+        if (live && j.ok) setPub({ status: j.status ?? null, onPortals: Boolean(j.onPortals), blockers: j.blockers ?? [], sending: Boolean(j.sending), neverTold: Boolean(j.neverTold) });
       })
       .catch(() => {});
     return () => {
@@ -3116,6 +3117,8 @@ function ListingDrawerBody({
             </button>
           </div>
         )}
+        {/* Let or withdrawn here, still live on the portals (ticket 5474011a). */}
+        {Number(listing.id) > 0 && withdrawnHere && pub?.neverTold && <StillOnPortals listingId={String(listing.id)} home={listing.name} className="-mt-4 mb-8" />}
         {Number(listing.id) > 0 && (withdrawnHere || listing.letAgreed || listing.archiveReason === "withdrawn") && (
           <div className="-mt-4 mb-8">
             <WithdrawnBox listingId={String(listing.id)} address={listing.name} onChanged={() => { setActivityKey((k) => k + 1); reloadPub(); }} />

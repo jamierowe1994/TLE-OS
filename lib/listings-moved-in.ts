@@ -1,6 +1,7 @@
 import "server-only";
 import { sameHome } from "@/lib/address-parse";
-import { stillOnPortalFeeds } from "@/lib/advert-offline";
+import { PORTAL_STATE_SWITCH, portalsNeverToldOff, stillOnPortalFeeds } from "@/lib/advert-offline";
+import { switchOn } from "@/lib/switches";
 import { assembled, heldCopy, type Assembled } from "@/lib/applications-board";
 import { getAllPropolyDeals, getPropolyCompletes, type BusinessDeal, type CompletedDeal } from "@/lib/business/propoly-deals";
 import { listingRead } from "@/lib/listing-details";
@@ -176,9 +177,11 @@ function portalsOf(feeds: unknown): string[] {
 }
 
 /** Every let listing REX holds, published ones only: the ones a feed could still carry. */
-async function leasedListings(): Promise<{ listings: OsListing[]; agents: Map<string, string> }> {
+async function leasedListings(): Promise<{ listings: OsListing[]; agents: Map<string, string>; own: Map<string, { system_listing_state: unknown; state_change_timestamp: unknown }> }> {
   const listings: OsListing[] = [];
   const agents = new Map<string, string>();
+  /* When REX marked each one let, for portalsNeverToldOff (ticket 5474011a). */
+  const own = new Map<string, { system_listing_state: unknown; state_change_timestamp: unknown }>();
   for (let n = 0; n < 10; n++) {
     const res = await rexCall("Listings", "search", {
       criteria: [
@@ -198,12 +201,13 @@ async function leasedListings(): Promise<{ listings: OsListing[]; agents: Map<st
       /* Edited mid-read, a listing can land on two pages. Once each. */
       if (l.publicationStatus !== "published" || agents.has(l.id) || listings.some((x) => x.id === l.id)) continue;
       listings.push(l);
+      own.set(l.id, { system_listing_state: r.system_listing_state, state_change_timestamp: r.state_change_timestamp });
       const agent = (r.listing_agent_1 as { name?: unknown } | null)?.name;
       if (typeof agent === "string" && agent) agents.set(l.id, agent);
     }
     if (rows.length < 100) break;
   }
-  return { listings, agents };
+  return { listings, agents, own };
 }
 
 /** The listing agents of the book's homes, one search per hundred. */
@@ -333,12 +337,13 @@ async function feedsFor(ids: string[]): Promise<Map<string, unknown | null>> {
 }
 
 export async function buildMovedInReport(today = londonToday()): Promise<MovedInReport> {
-  const [book, leased, apps, deals, completes] = await Promise.all([
+  const [book, leased, apps, deals, completes, neverToldOn] = await Promise.all([
     bookFor(null).then(withTakenState),
     leasedListings(),
     applications(),
     getAllPropolyDeals().catch(() => null) as Promise<BusinessDeal[] | null>,
     getPropolyCompletes().catch(() => null) as Promise<CompletedDeal[] | null>,
+    switchOn(PORTAL_STATE_SWITCH).catch(() => false),
   ]);
   const inBook = (book.listings as (OsListing & { taken?: { why: string } | null })[]).filter(
     (l) => !isTestId(l.id) && l.publicationStatus === "published" && (l.letAgreed || l.taken)
@@ -360,7 +365,8 @@ export async function buildMovedInReport(today = londonToday()): Promise<MovedIn
       unreadable += 1;
       continue;
     }
-    if (!stillOnPortalFeeds(f)) continue;
+    /* Or let in REX after the portals' last upload, so they never heard (ticket 5474011a, switch listing_portal_state). */
+    if (!stillOnPortalFeeds(f) && !(neverToldOn && portalsNeverToldOff(f, leased.own.get(h.listingId)))) continue;
     rows.push({ ...h, agent: leased.agents.get(h.listingId) ?? bookAgents.get(h.listingId) ?? null, portals: portalsOf(f) });
   }
   rows.sort((a, b) => b.days - a.days || a.address.localeCompare(b.address));

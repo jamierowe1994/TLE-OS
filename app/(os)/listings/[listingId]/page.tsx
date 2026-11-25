@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import ListingDrawer, { type Listing } from "@/components/ListingDrawer";
+import StillOnPortals from "@/components/listing/StillOnPortals";
 import { peekJson, readJson } from "@/lib/page-cache";
 import { listingOrder } from "@/lib/listing-order";
 import type { ArchiveReason } from "@/lib/listing-archive";
@@ -177,9 +178,11 @@ export default function ListingPage() {
             ? gone.let
               ? `Moved in ${gone.let.date ? longDay(gone.let.date) : "recently"}${gone.let.service ? `, ${(SERVICE[gone.let.service] ?? gone.let.service).toLowerCase()}` : ""}${gone.let.rentPcm ? `, £${gone.let.rentPcm.toLocaleString("en-GB")} pcm` : ""}.`
               : "It is marked as let."
-            : "It isn't being advertised any more."}
+            : "It is off the market."}
           {gone.agent ? ` ${gone.agent}'s listing.` : ""}
         </p>
+        {/* Let here, but the portals were never told (ticket 5474011a, switch listing_portal_state). */}
+        <StillOnPortals listingId={listingId} home={home} style={{ margin: "20px auto 0", maxWidth: 576 }} />
         <p className="mt-2 text-[12.5px] text-muted">
           {leased
             ? gone.let?.service === "tenant_find"

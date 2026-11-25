@@ -1,6 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
-import { stillOnPortalFeeds } from "@/lib/advert-offline";
+import { PORTAL_STATE_SWITCH, portalsNeverToldOff, stillOnPortalFeeds } from "@/lib/advert-offline";
+import { switchOn } from "@/lib/switches";
 import { allCancellations } from "@/lib/let-cancel";
 import { forgetListing, readListingDetails } from "@/lib/listing-details";
 import { invalidateListingBook } from "@/lib/listings-cache";
@@ -79,9 +80,10 @@ const ymd = (v: unknown): string | null => {
 
 /** What the listings system says about the listing itself. */
 async function listingNow(id: number) {
-  const [read, feeds] = await Promise.all([
+  const [read, feeds, neverToldOn] = await Promise.all([
     rexCall("Listings", "read", { id }),
     rexCall("ListingPortalUploads", "getStatuses", { listing_id: id, include_last_sent: false }),
+    switchOn(PORTAL_STATE_SWITCH).catch(() => false),
   ]);
   if (!read.ok) throw new Error("The listings system didn't answer. Try again in a minute.");
   const r = (read.result ?? {}) as Record<string, unknown>;
@@ -90,7 +92,8 @@ async function listingNow(id: number) {
     on: ymd(r.state_date),
     why: typeof r.state_reason_note === "string" && r.state_reason_note.trim() ? r.state_reason_note.trim() : null,
     letAgreed: r.let_agreed === true,
-    stillShowing: feeds.ok ? stillOnPortalFeeds(feeds.result) : false,
+    /* Or withdrawn after the portals' last upload, so they never heard (ticket 5474011a, lib/advert-offline). */
+    stillShowing: feeds.ok ? stillOnPortalFeeds(feeds.result) || (neverToldOn && portalsNeverToldOff(feeds.result, r)) : false,
     portalsChannel: r.publish_to_portals === true,
   };
 }

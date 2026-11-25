@@ -1,5 +1,6 @@
 import "server-only";
-import { stillOnPortalFeeds } from "@/lib/advert-offline";
+import { PORTAL_STATE_SWITCH, stillOnPortalFeeds } from "@/lib/advert-offline";
+import { switchOn } from "@/lib/switches";
 import { forgetListing } from "@/lib/listing-details";
 import { invalidateListingBook } from "@/lib/listings-cache";
 import { forgetMovedIn } from "@/lib/listings-moved-in";
@@ -196,6 +197,26 @@ export async function takeAdvertOff(id: number, token: string | null, byName = "
     const res: RexResponse = { status: told.res.status, ok: false, result: told.res.result, error: `The portals were not told to withdraw it: ${told.detail}` };
     return { ok: false, step: "refused", was, error: res.error!, res, notAllowed: by.notAllowed };
   }
+  /* WITHDRAWN, THEN TOLD AGAIN, BEFORE THE CHANNEL GOES (ticket 5474011a, 24
+     Nov 2026). The upload above can finish before the withdrawal lands: one
+     take-off on 17 Nov finished 3 seconds early and that home was still live
+     on Rightmove and OnTheMarket a week later, while every home whose last
+     upload finished after REX's change was gone (lib/advert-offline
+     portalsNeverToldOff). So with the switch on, the listing is withdrawn
+     while the portals channel is still open and a second upload follows,
+     which is the one the portals act on. "Already queued" is one still
+     waiting, which now goes after the change as well. A refused second upload
+     is logged and does not undo the take-off. Off, the old order. */
+  const tellAgain = await switchOn(PORTAL_STATE_SWITCH).catch(() => false);
+  let withdrawal: Withdrawal | null = null;
+  if (tellAgain) {
+    withdrawal = await withdrawInRex(id, token, byName, by).catch((): Withdrawal => "refused");
+    if (withdrawal === "withdrawn") {
+      const again = await asThemOrOffice(token, "portals told again", by, (t) => queueUpload(id, "off", t), (r) => r.ok || /already queued/i.test(r.detail), (r) => ({ ...r.res, ok: r.ok, error: r.ok ? null : r.detail })).catch(() => null);
+      if (!again || !(again.ok || /already queued/i.test(again.detail))) console.warn(`[listing-take-off] ${id}: the second upload after withdrawing was not sent: ${again?.detail ?? "no answer"}`);
+    }
+  }
+
   const res = await channels("portals channel closed", OFF_CHANNELS);
   if (!res.ok) return { ok: false, step: "refused", was, error: String(res.error ?? `HTTP ${res.status}`), res, notAllowed: by.notAllowed };
 
@@ -208,7 +229,7 @@ export async function takeAdvertOff(id: number, token: string | null, byName = "
 
   /* Then off the market in REX itself (16 Nov 2026, see withdrawInRex). A
      refusal here leaves the take-off as done and says so in the outcome. */
-  const withdrawal = await withdrawInRex(id, token, byName, by).catch((): Withdrawal => "refused");
+  withdrawal ??= await withdrawInRex(id, token, byName, by).catch((): Withdrawal => "refused");
 
   await invalidateListingBook();
   forgetListing(id);

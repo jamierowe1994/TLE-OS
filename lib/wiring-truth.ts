@@ -38,6 +38,7 @@ export const REX_WRITE_SWITCHES = [
   "handover_live",
   "take_on_rex",
   "listing_auto_takedown",
+  "listing_portal_state",
 ];
 
 export async function rexTruth(): Promise<RexTruth> {

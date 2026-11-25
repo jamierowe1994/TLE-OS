@@ -173,9 +173,50 @@ export function stillOnPortalFeeds(feeds: unknown): boolean {
  * still has it current, and its page and the board offer Take Off the Portals
  * again, which now withdraws it in REX. `state` is Listings/read's
  * system_listing_state.
+ *
+ * Measured on 24 Nov 2026 (portalsNeverToldOff below): the ticket's home had
+ * been marked let in REX that morning, so this did not reach it; every home
+ * then Offline and current was already off Rightmove.
  */
 export function offlineButStillCurrent(feeds: unknown, state: unknown): boolean {
   return stillOnPortalFeeds(feeds) || state === "current";
+}
+
+/**
+ * LET IN REX, BUT THE PORTALS NEVER HEARD (Sean McMahon, ticket 5474011a,
+ * reported three times by 24 Nov 2026: "Properties that have been let are
+ * still appearing on the portals as available").
+ *
+ * Measured on 24 Nov 2026 across 234 let or withdrawn listings, each checked
+ * on Rightmove and OnTheMarket themselves: every one whose last portal upload
+ * finished AFTER REX marked it let or withdrawn was gone from Rightmove. All 7
+ * still live there had their last upload finish BEFORE that change - sent
+ * "withdrawn" while the listing was still current, then marked let later with
+ * the portals channel off, so REX sent nothing (Sean's home: offline 26 Oct,
+ * let in REX 24 Nov, still live on both). One was a take-off whose upload
+ * finished 3 seconds before its own withdrawal landed.
+ *
+ * So: a feed is running, REX's listing is no longer current, and the last
+ * upload finished before (or within a few seconds of) that change. Taking it
+ * off again sends a fresh upload, which the portals then act on.
+ * `own` is Listings/read. Behind the switch PORTAL_STATE_SWITCH.
+ */
+export const PORTAL_STATE_SWITCH = "listing_portal_state";
+const SETTLE_S = 5;
+
+export function portalsNeverToldOff(feeds: unknown, own: unknown): boolean {
+  const f = (feeds ?? {}) as { portals?: unknown; most_recent_queue?: { completion_time?: unknown; start_time?: unknown } | null };
+  const o = (own ?? {}) as { system_listing_state?: unknown; state_change_timestamp?: unknown };
+  const running = Array.isArray(f.portals) && f.portals.some((p) => (p as { feed_status?: unknown }).feed_status === "feeding" && Boolean((p as { remote_id_on_portal?: unknown }).remote_id_on_portal));
+  if (!running) return false;
+  const state = String(o.system_listing_state ?? "");
+  if (state !== "leased" && state !== "withdrawn" && state !== "sold") return false;
+  const changed = Number(o.state_change_timestamp);
+  /* No queue or no times: we cannot tell, and a guess would put a let home back on a screen as live. */
+  const q = f.most_recent_queue;
+  const sent = Number(q?.completion_time ?? q?.start_time);
+  if (!Number.isFinite(changed) || changed <= 0 || !Number.isFinite(sent) || sent <= 0) return false;
+  return sent < changed + SETTLE_S;
 }
 
 /* The kept answers live in os_cache, so a deploy does not blank the stamps.

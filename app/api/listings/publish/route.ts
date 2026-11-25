@@ -8,7 +8,8 @@ import { record } from "@/lib/audit";
 import { invalidateListingBook } from "@/lib/listings-cache";
 import { forgetListing, listingRead, readListingDetails } from "@/lib/listing-details";
 import { listingIsTheirs } from "@/lib/listing-gate";
-import { markOffline, markOnline, stillOnPortalFeeds } from "@/lib/advert-offline";
+import { markOffline, markOnline, PORTAL_STATE_SWITCH, portalsNeverToldOff, stillOnPortalFeeds } from "@/lib/advert-offline";
+import { switchOn } from "@/lib/switches";
 import { ALL_CHANNELS, OFF_CHANNELS, currentInRex, queueUpload, takeAdvertOff, whereFrom } from "@/lib/listing-take-off";
 import { sendFrom, waitForSend } from "@/lib/portal-send";
 import { publishGaps, TERMS_UNCHECKED } from "@/lib/listing-publish-check";
@@ -237,7 +238,14 @@ export async function GET(req: NextRequest) {
        leased or sold is off the market, unless a feed is still showing it. */
     const where = whereFrom(status.result, feeds.ok ? feeds.result : undefined);
     const state = own.ok ? String((own.result as { system_listing_state?: unknown } | null)?.system_listing_state ?? "") : "";
-    const gone = state !== "" && state !== "current" && !stillOnPortalFeeds(feeds.ok ? feeds.result : undefined);
+    /* LET IN REX AFTER THE PORTALS' LAST UPLOAD (Sean McMahon, ticket 5474011a,
+       24 Nov 2026): leased here, live on Rightmove and OnTheMarket, because
+       the last thing the portals were sent went before REX marked it let.
+       Still on the portals, so Take It Offline is offered and sends them a
+       fresh upload (lib/advert-offline portalsNeverToldOff). Behind its switch. */
+    const neverTold =
+      state !== "" && state !== "current" && feeds.ok && own.ok && portalsNeverToldOff(feeds.result, own.result) && (await switchOn(PORTAL_STATE_SWITCH).catch(() => false));
+    const gone = state !== "" && state !== "current" && !neverTold && !stillOnPortalFeeds(feeds.ok ? feeds.result : undefined);
     /* A send REX has not finished yet (Sean, 5 Nov 2026): the screen says it
        is on its way rather than that it is on the portals. */
     let sending = !gone && where.status === "published" && where.channels.includes("portals") && feeds.ok && sendFrom(feeds.result, 0).state === "sending";
@@ -252,6 +260,8 @@ export async function GET(req: NextRequest) {
       ...where,
       sending,
       ...(gone ? { status: state, onPortals: false } : {}),
+      /* Still let on its page (no viewings, no offers), but on the portals, so the Offline card offers Take It Offline again. */
+      ...(neverTold ? { status: state, onPortals: true, neverTold: true } : {}),
       listingState: state || null,
       blockers: [...new Set([...list(iss.errors), ...(upload.ok ? portalMessages(upload.result) : [])].map((m) => forAgent(actor, m, PORTAL_CHECK)))],
       warnings: [...new Set(list(iss.warnings).map((m) => forAgent(actor, m, PORTAL_WARNING)))],

@@ -653,6 +653,19 @@ export const SWITCHES: Switch[] = [
     legacyOn: "on",
   },
   {
+    /* Sean McMahon, ticket 5474011a (24 Nov 2026): let homes still live on
+       Rightmove and OnTheMarket because the portals' last upload went before
+       REX marked them let (lib/advert-offline portalsNeverToldOff). Off, the
+       OS reads the feeds as before. No new variable: unset is off. */
+    key: "listing_portal_state",
+    label: "Let homes the portals were never told about",
+    what: "A listing REX has as let or withdrawn, whose last upload to the portals went before that change, counts as still on the portals: its page says so and offers Take It Offline, and it joins Listings > Moved In and Still Advertised. A take-off that withdraws a listing in REX also sends the portals a second upload once the withdrawal has landed, so it can't lose the race.",
+    who: "Nobody is emailed. Showing the homes writes nothing. Pressing Take It Offline on one, and the second upload, WRITE TO REX (ListingPortalUploads/queue, ListingPublication/setActivePublicationChannels) and the PUBLIC portals drop the advert.",
+    confirm: "TELL THE PORTALS",
+    legacyEnv: "LISTING_PORTAL_STATE",
+    legacyOn: "on",
+  },
+  {
     /* Print Brochure (Erleta Vathej, ticket 47b2389c; James, 10 Nov 2026: an
        A4 brochure to hand out at viewings, with no landlord details).
        lib/viewing-brochure + app/brochure. Off, the buttons are hidden and the page
