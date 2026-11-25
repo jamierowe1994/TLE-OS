@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import DocumentsView from "@/components/landlord/DocumentsView";
 import { currentLandlord } from "@/lib/landlord-account";
 import { loadLandlordDocuments } from "@/lib/landlord-documents-view";
@@ -10,7 +11,10 @@ export const metadata = { title: "Your documents · The Letting Experts" };
  * came from us, and the certificates on every property we look after.
  */
 export default async function LandlordDocumentsPage({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
-  const me = (await currentLandlord())!;
+  const me = await currentLandlord();
+  /* The layout's redirect does not stop this page rendering alongside it,
+     so a signed-out visit would read a null landlord. */
+  if (!me) redirect("/landlord/sign-in");
   /* Which property, from the address bar. See PlacePicker. */
   const { p } = await searchParams;
   const [{ view, first }, docs] = await Promise.all([loadLandlordHome(me, p), loadLandlordDocuments(me, p)]);

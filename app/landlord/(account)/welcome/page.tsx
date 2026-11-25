@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { currentLandlord } from "@/lib/landlord-account";
 
@@ -7,7 +8,10 @@ import { currentLandlord } from "@/lib/landlord-account";
  * plain-English notice about their details, then straight in.
  */
 export default async function LandlordWelcome() {
-  const me = (await currentLandlord())!;
+  const me = await currentLandlord();
+  /* The layout's redirect does not stop this page rendering alongside it,
+     so a signed-out visit would read a null landlord. */
+  if (!me) redirect("/landlord/sign-in");
   const first = me.name.split(/\s+/)[0] || me.name;
   return (
     <div className="mx-auto grid max-w-3xl items-center gap-10 py-14 md:grid-cols-[1fr_240px]">

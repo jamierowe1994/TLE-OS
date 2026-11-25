@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import PropertyQuestions from "@/components/landlord/PropertyQuestions";
 import { currentLandlord } from "@/lib/landlord-account";
 import { loadLandlordHome } from "@/lib/landlord-home-view";
@@ -13,7 +14,10 @@ export const metadata = { title: "About your property · The Letting Experts" };
  * where you left off" needs somewhere to carry on.
  */
 export default async function LandlordQuestionsPage() {
-  const me = (await currentLandlord())!;
+  const me = await currentLandlord();
+  /* The layout's redirect does not stop this page rendering alongside it,
+     so a signed-out visit would read a null landlord. */
+  if (!me) redirect("/landlord/sign-in");
   const { view, first } = await loadLandlordHome(me);
   return (
     <div className="pt-4">

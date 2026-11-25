@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import JourneyView from "@/components/landlord/JourneyView";
 import { currentLandlord } from "@/lib/landlord-account";
 import { loadLandlordHome } from "@/lib/landlord-home-view";
@@ -10,7 +11,10 @@ export const metadata = { title: "Your letting journey · The Letting Experts" }
  * and who does what at every stop.
  */
 export default async function LandlordJourney({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
-  const me = (await currentLandlord())!;
+  const me = await currentLandlord();
+  /* The layout's redirect does not stop this page rendering alongside it,
+     so a signed-out visit would read a null landlord. */
+  if (!me) redirect("/landlord/sign-in");
   /* Which property, from the address bar. See PlacePicker. */
   const { p } = await searchParams;
   const { view, first } = await loadLandlordHome(me, p);

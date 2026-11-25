@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import MaintenanceView from "@/components/landlord/MaintenanceView";
 import { currentLandlord } from "@/lib/landlord-account";
 import { loadLandlordHome } from "@/lib/landlord-home-view";
@@ -11,7 +12,10 @@ export const metadata = { title: "Maintenance · The Letting Experts" };
  * book, and a way to report something themselves.
  */
 export default async function LandlordMaintenancePage({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
-  const me = (await currentLandlord())!;
+  const me = await currentLandlord();
+  /* The layout's redirect does not stop this page rendering alongside it,
+     so a signed-out visit would read a null landlord. */
+  if (!me) redirect("/landlord/sign-in");
   /* Which property, from the address bar. See PlacePicker. */
   const { p } = await searchParams;
   const [{ view, first }, m] = await Promise.all([loadLandlordHome(me, p), loadLandlordMaintenance(me)]);

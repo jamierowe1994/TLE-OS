@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import MessagesView from "@/components/landlord/MessagesView";
 import { currentLandlord } from "@/lib/landlord-account";
 import { loadLandlordHome } from "@/lib/landlord-home-view";
@@ -7,7 +8,10 @@ export const metadata = { title: "Messages · The Letting Experts" };
 
 /** The landlord's messages, live: the thread with their agent, from the same view the home page reads. */
 export default async function LandlordMessagesPage({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
-  const me = (await currentLandlord())!;
+  const me = await currentLandlord();
+  /* The layout's redirect does not stop this page rendering alongside it,
+     so a signed-out visit would read a null landlord. */
+  if (!me) redirect("/landlord/sign-in");
   /* Which property, from the address bar. See PlacePicker. */
   const { p } = await searchParams;
   const { view, first } = await loadLandlordHome(me, p);

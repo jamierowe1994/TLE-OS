@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import LandlordDashboard from "@/components/landlord/Dashboard";
 import { requiredDocsFor } from "@/lib/landlord-home-view";
 import LandlordDocuments from "@/components/LandlordDocuments";
@@ -12,7 +13,10 @@ import type { ManagedProperty } from "@/lib/portfolio-types";
  * (shared with the journey page); this file only lays it out.
  */
 export default async function LandlordHome({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
-  const me = (await currentLandlord())!;
+  const me = await currentLandlord();
+  /* The layout's redirect does not stop this page rendering alongside it,
+     so a signed-out visit would read a null landlord. */
+  if (!me) redirect("/landlord/sign-in");
   /* Which property, from the address bar. See PlacePicker. */
   const { p } = await searchParams;
   const { view, open, rest, compliance, docs, first } = await loadLandlordHome(me, p);
