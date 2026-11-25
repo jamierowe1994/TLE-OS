@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PortalStat } from "@/lib/rex-portal-stats";
 import type { HistoryPoint, Market } from "@/lib/portal-market";
 
@@ -31,18 +31,24 @@ type Answer = {
  * fixed drawing stretched to fit (12 Oct 2026).
  */
 function useWidth(fallback: number) {
-  const ref = useRef<HTMLDivElement | null>(null);
   const [w, setW] = useState(fallback);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+  /* Watched once, from the moment the box is on the page (ticket 70824248,
+     24 Nov 2026). This made a new watcher after EVERY draw - a new watcher
+     always reports straight away - so each draw set the width again and left
+     another draw waiting: the pattern behind "Maximum update depth exceeded"
+     on a slow laptop. Only a real change of width is kept. */
+  const watcher = useRef<ResizeObserver | null>(null);
+  const ref = useCallback((el: HTMLDivElement | null) => {
+    watcher.current?.disconnect();
+    watcher.current = null;
+    if (!el || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(([e]) => {
       const next = Math.round(e.contentRect.width);
-      if (next > 0) setW(next);
+      if (next > 0) setW((cur) => (cur === next ? cur : next));
     });
     ro.observe(el);
-    return () => ro.disconnect();
-  });
+    watcher.current = ro;
+  }, []);
   return [ref, w] as const;
 }
 

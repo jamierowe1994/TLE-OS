@@ -142,11 +142,26 @@ export default function FloatSheet({ open = true, title, onClose, step, steps, o
     if (b && b.scrollHeight - b.clientHeight > 2 && getComputedStyle(b).overflowY !== "visible") return b;
     return r;
   }, []);
+  /* Set up once per screen, and `more` is only set when it actually changes
+     (ticket 70824248, 24 Nov 2026: "Minified React error #185" typing in New
+     Appointment on the Diary; the 23 Nov one typing in What Went Wrong was the
+     same). This used to re-run after every keystroke - `children` is new on
+     every draw - and each run set `more` again. That left one more redraw
+     waiting after every key, and when keys arrived faster than the laptop
+     could draw (a slow machine, fast typing) those waiting redraws piled up
+     until React stopped the box with "Maximum update depth exceeded". Now a
+     box being added or taken away is caught by watching the body's children,
+     a box changing size by the ResizeObserver, and nothing is set unless the
+     answer changed. */
+  const moreNow = useRef(false);
   useEffect(() => {
     if (!open) return;
     const check = () => {
       const el = scroller();
-      setMore(Boolean(el && el.scrollHeight - el.scrollTop - el.clientHeight > 24));
+      const next = Boolean(el && el.scrollHeight - el.scrollTop - el.clientHeight > 24);
+      if (next === moreNow.current) return;
+      moreNow.current = next;
+      setMore(next);
     };
     check();
     const b = body.current;
@@ -155,16 +170,25 @@ export default function FloatSheet({ open = true, title, onClose, step, steps, o
     r?.addEventListener("scroll", check, { passive: true });
     window.addEventListener("resize", check);
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(check) : null;
-    if (b) { ro?.observe(b); for (const c of Array.from(b.children)) ro?.observe(c); }
+    const watchBoxes = () => {
+      if (!b || !ro) return;
+      ro.disconnect();
+      ro.observe(b);
+      for (const c of Array.from(b.children)) ro.observe(c);
+    };
+    watchBoxes();
+    const mo = b && typeof MutationObserver !== "undefined" ? new MutationObserver(() => { watchBoxes(); check(); }) : null;
+    if (b) mo?.observe(b, { childList: true });
     const t = window.setTimeout(check, 600);
     return () => {
       b?.removeEventListener("scroll", check);
       r?.removeEventListener("scroll", check);
       window.removeEventListener("resize", check);
       ro?.disconnect();
+      mo?.disconnect();
       window.clearTimeout(t);
     };
-  }, [open, screenKey, scroller, children]);
+  }, [open, screenKey, scroller]);
   const scrollOn = () => {
     const el = scroller();
     el?.scrollBy({ top: Math.max(160, el.clientHeight * 0.75), behavior: "smooth" });
