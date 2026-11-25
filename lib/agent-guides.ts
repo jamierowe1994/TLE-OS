@@ -39,6 +39,72 @@ const img = (name: string) => `/guides/agents/${name}.webp`;
 
 export const AGENT_GUIDES: Guide[] = [
   {
+    /* James, 25 Nov 2026: the second News post points here - everything the
+       big Steve update lets an agent do. The look-ups need switch stevereads
+       on for them; the report steps need fixit (on for everyone). */
+    id: "steve-new",
+    title: "What Steve Can Do for You Now",
+    blurb:
+      "Steve can now look up the answers to more of your questions himself, show you where a button is, and help put a problem right before you report it. Here is everything that is new.",
+    icon: "message",
+    href: "/portfolio",
+    minutes: 3,
+    short: [
+      "Ask Steve about a let, a home, a listing or the rent. He looks it up and tells you.",
+      "He only reads. He never changes anything and never sends anything to anyone.",
+      "Ask \"how do I...\" and he points at the button on your screen.",
+      "Reporting a problem? Try his offer first, and add a line with any recording.",
+    ],
+    steps: [
+      {
+        title: "Why Won't My Let Go Through?",
+        body: "Ask Steve why a let won't go across to Propoly, for example: why won't 14 Example Road go through? He checks the let and tells you exactly what is missing or in the way, such as a tenant with no email or no move-in date.",
+        why: "You can put it right yourself straight away, instead of reporting it and waiting.",
+      },
+      {
+        title: "Is the Rent Up to Date?",
+        body: "Ask about any home we look after: is the rent up to date at 14 Example Road? Steve reads PayProp there and then and tells you what each tenant owes, when they last paid and what the rent is.",
+        how: "It is read live each time you ask, so it is never an old figure.",
+      },
+      {
+        title: "How Is My Listing Doing?",
+        body: "Ask how a listing is doing on Rightmove, Zoopla and OnTheMarket. Steve tells you how often it came up in searches, how often people clicked into it, and how it compares with our other homes. If a portal turned the advert down, he tells you why in plain words.",
+      },
+      {
+        title: "What's on a Home's File?",
+        body: "Ask who lives at a home, when the tenancy ends, whether the tenancy agreement is on file, or what the key number is. Steve tells you the tenancy dates, the rent, the papers on the home's file, and the key numbers and where they are kept.",
+      },
+      {
+        title: "Right to Rent Dates",
+        body: "Ask for the right to rent dates on a let. Steve gives you each tenant's date, or tells you it has no time limit, or that nothing is recorded yet.",
+      },
+      {
+        title: "Find a Passport by Email",
+        body: "For the office team: give Steve a tenant's email address and he tells you whether their passport was sent, started or finished and when, who sent it, and the home they enquired about. He never shows the answers on the passport itself.",
+        how: "This one is for the office team only: admin, pre-tenancy and compliance.",
+      },
+      {
+        title: "Show Me Where",
+        body: "Ask Steve how to do a job and he takes you to the right screen and points at the button. He now knows 16 more jobs, including: re-let a home, book the check-out, email certificates to the tenants, set the advert price, mark a listing let agreed, send or reissue Terms of Business, start the PLC check, cancel a deal, check a contractor's invoice, find a landlord statement and take on a new home.",
+        why: "It is quicker than a guide. Ask in your own words, for example: how do I re-let this home?",
+      },
+      {
+        title: "Put It Right Before You Report It",
+        body: "When you press Report on a listing, a let or a home, Steve may offer to help first: an Edit button that takes you straight to the box that is wrong, or the answer to a how-do-I. If that sorts it, there is nothing to send. Send It to James Anyway is always there.",
+      },
+      {
+        title: "Add a Line With a Recording",
+        body: "If you attach a screen recording or a screenshot, write one line with it: what did you expect to happen? Send It waits until there is a line.",
+        why: "A recording on its own shows what happened, but not what should have happened. One line means it can be fixed first time, without coming back to ask you.",
+      },
+      {
+        title: "Already Reported? You'll Hear When It's Fixed",
+        body: "If somebody has already reported the same problem on the same record, Steve puts your report with theirs and tells you. When it is fixed, you both hear at the same time, with a note of what changed.",
+        sends: "A note in your Steve chat. Nothing goes to landlords or tenants.",
+      },
+    ],
+  },
+  {
     /* James, 25 Nov 2026: the first News post points here. Pictures on the
        invented home (Flat 2, 14 Example Road) in the new look. */
     id: "steve-find",
