@@ -9,6 +9,7 @@ import { switchOn } from "@/lib/switches";
 import { worksSweep } from "@/lib/works-sweep";
 import { sweepTickets } from "@/lib/ticket-sweep";
 import { publicOrigin } from "@/lib/origin";
+import { refreshRecruitmentIfStale } from "@/lib/business/recruitment-figures";
 
 /**
  * The reminders run.
@@ -44,6 +45,10 @@ export async function POST(req: NextRequest) {
      in the first dashboard of the morning. Started first so it runs beside the
      reminders rather than after them; it never throws. */
   const diaryWarm = warmDiary();
+  /* Recruitment figures (James, 26 Nov 2026; lib/business/recruitment-figures):
+     read Teamtailor again once the figures are an hour old. Only starts the
+     read - it runs on after this answer - and does nothing without a key. */
+  void refreshRecruitmentIfStale().catch(() => {});
   /* LET ADVERTS TAKEN DOWN (Susan Liles, 3 Nov 2026; lib/listings-auto-takedown).
      On this hourly timer because it is one that is proven to run: the
      lunchtime cron's deployment still carries its old command and never

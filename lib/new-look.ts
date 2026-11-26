@@ -121,6 +121,8 @@ export const LOOK_SCREENS = [
   /* The guide pop-ups in the house style (James, 25 Nov 2026: "make sure it's in the new style ... nice and super readable"). components/new-look/GuideSheet. */
   { id: "guides", label: "Guide pop-ups", what: "Every guide opened from Steve, Help or a How This Works button reads in the house style: a darkened page, one square white sheet, the title in the condensed capitals, The Short Version at the top, numbered steps in a larger serif, pictures in fine square frames and brown buttons. Same guides, same words. Off, the rounded pop-up as it is." },
   { id: "fixit", label: "Report: put it right yourself", what: "A report from a listing, a let or a home that something is wrong, missing or can't be changed gets Steve's offer first: Edit on the record, and he shows where it is. A how-do-I gets his answer first. Send it to James anyway is always there. Off, every report goes straight to James." },
+  /* Not a reskin (James, 26 Nov 2026): recruitment figures for Susan, counted from Teamtailor. lib/business/recruitment-figures. */
+  { id: "recruitment", label: "Recruitment figures", what: "A Recruitment tab in My Business (Susan's figures): open vacancies, applications, where they came from, how many are at each stage, offers, hires, time to hire and rejections, counted from Teamtailor and refreshed every hour. Counts only: no candidate's name or details are read into the OS. Off, the tab is not there." },
 ] as const;
 
 export type LookScreen = (typeof LOOK_SCREENS)[number]["id"];
