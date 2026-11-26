@@ -69,7 +69,12 @@ type Ready = {
   claude: { canSend: boolean; ready: boolean; canPush: boolean };
   /** What went wrong on a press, by ticket; "Sending…" while it goes. */
   claudeSaid: Record<string, string>;
-  sendToClaude: (id: string) => Promise<void>;
+  /** `say` is what James typed in Tell Claude (switch claudemore); answers whether it went. */
+  sendToClaude: (id: string, say?: string) => Promise<boolean>;
+  /** Switch "claudemore" (26 Nov 2026): Tell Claude, Answer Claude, New Task for Claude. */
+  more?: boolean;
+  /** New Task for Claude: "" when it went, else what went wrong. */
+  newTask?: (words: string) => Promise<string>;
   /** Push It Live (lib/github-pr): what went wrong, by ticket; "Pushing…" while it goes. */
   pushSaid: Record<string, string>;
   pushClaude: (id: string) => Promise<void>;
@@ -187,6 +192,8 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
   /* Which ticket has its Review Later picker open, and the day typed into it. */
   const [picking, setPicking] = useState<string | null>(null);
   const [pickDay, setPickDay] = useState("");
+  /* Tell Claude (26 Nov 2026): which ticket the box is open for, or a new task (bug null). */
+  const [asking, setAsking] = useState<{ bug: Bug | null; answer: boolean } | null>(null);
   /* Answered by Claude folded away (James, 12 Nov 2026: "I should be able to
      collapse the replies from Claude"), remembered on this browser. */
   const [folded, setFolded] = useState(false);
@@ -219,7 +226,7 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
       </Tab>
     );
   }
-  const { people, auto, pick, counts, laterCount, putRight, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict, claude, claudeSaid, sendToClaude, pushSaid, pushClaude } = state;
+  const { people, auto, pick, counts, laterCount, putRight, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict, claude, claudeSaid, sendToClaude, pushSaid, pushClaude, more, newTask } = state;
   const open = (b: Bug) => b.state === "open" || b.state === "ack";
   const withClaude = (b: Bug) => open(b) && b.botState === "with_claude";
   /* Back from Claude with something for James: a fix to push, a question, or
@@ -228,6 +235,18 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
   const backFromClaude = (b: Bug) => open(b) && Boolean(b.claudeUrl) && ["fix_ready", "needs_you", "not_a_bug"].includes(b.botState ?? "");
   const claudeReply = (b: Bug) =>
     typeof b.context?.claudeReply === "string" && !b.context?.replySentAt ? (b.context.claudeReply as string) : "";
+  /* What James told Claude on this ticket, oldest first (lib/claude-tickets ClaudeTurn). */
+  const toldClaude = (b: Bug): Array<{ at: string; text: string }> => {
+    const t = b.context?.claudeThread;
+    return Array.isArray(t)
+      ? t
+          .filter((x) => x && typeof x === "object" && x.who === "james" && typeof x.text === "string")
+          /* A task's first words are its body, already shown above. */
+          .filter((x) => !(b.kind === "task" && x.text === b.body))
+          .map((x) => ({ at: String(x.at ?? ""), text: String(x.text) }))
+          .slice(-4)
+      : [];
+  };
   const theirs = (b: Bug) => (media[b.id] ?? []).filter((m) => m.source !== "claude");
   /* Steve answered a how-do-I by himself (lib/ticket-sort). */
   const steveAnswered = (b: Bug) => open(b) && b.botState === "steve_answered";
@@ -319,8 +338,19 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
                 {pushSaid[b.id] === "Pushing…" ? "Pushing…" : "Push It Live"}
               </button>
             ))}
+          {more && claude.canSend && b.botState === "needs_you" && (
+            <button
+              type="button"
+              disabled={!claude.ready || claudeSaid[b.id] === "Sending…"}
+              title="Your answer goes back to Claude with everything said so far"
+              onClick={() => setAsking({ bug: b, answer: true })}
+              className="nl-btn nl-btn--primary nl-btn--sm"
+            >
+              {claudeSaid[b.id] === "Sending…" ? "Sending…" : "Answer Claude"}
+            </button>
+          )}
           {b.claudeUrl && (
-            <a href={b.claudeUrl} target="_blank" rel="noreferrer" className={`nl-btn nl-btn--sm ${b.botState === "needs_you" && !doIt ? "nl-btn--primary" : "nl-btn--secondary"}`}>
+            <a href={b.claudeUrl} target="_blank" rel="noreferrer" className={`nl-btn nl-btn--sm ${b.botState === "needs_you" && !doIt && !more ? "nl-btn--primary" : "nl-btn--secondary"}`}>
               Open in Claude
             </a>
           )}
@@ -354,7 +384,9 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
             <span className="nl-meta">
               {b.kind === "auto"
                 ? `${b.path || "On the server"}${(b.occurrences ?? 1) > 1 ? `, seen ${b.occurrences} times` : ""}`
-                : `${b.kind}, ${b.reporterEmail || "unknown"} on ${b.path || "an unknown screen"}`}
+                : b.kind === "task"
+                  ? "Your task for Claude"
+                  : `${b.kind}, ${b.reporterEmail || "unknown"} on ${b.path || "an unknown screen"}`}
               {b.media ? `, ${b.media} attached` : ""}
             </span>
             {sorted(b) && (
@@ -364,6 +396,16 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
             )}
           </div>
           <p className="nl-adm-quote">{nd(b.body)}</p>
+          {more && toldClaude(b).length > 0 && (
+            <div className="nl-adm-told">
+              {toldClaude(b).map((t, i) => (
+                <p key={i} className="nl-meta">
+                  <span className="nl-strong">You told Claude</span>
+                  {t.at ? `, ${when(t.at)}` : ""}: {nd(t.text)}
+                </p>
+              ))}
+            </div>
+          )}
           {sorted(b)?.why && <p className="nl-meta">{nd(`The sorter left it for you: ${sorted(b)!.why}.`)}</p>}
           {b.botState === "steve_answered" ? (
             <div className="nl-adm-claude">
@@ -394,7 +436,7 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
                 type="button"
                 disabled={!claude.ready || claudeSaid[b.id] === "Sending…"}
                 title={claude.ready ? "A Claude Code session on your plan works this ticket and comes back with a fix to push, a question or an answer" : "Not connected yet: the routine's address and key go on Railway"}
-                onClick={() => void sendToClaude(b.id)}
+                onClick={() => (more ? setAsking({ bug: b, answer: false }) : void sendToClaude(b.id))}
                 className={`nl-btn nl-btn--sm ${b.claudeUrl ? "nl-btn--quiet" : steveAnswered(b) ? "nl-btn--secondary" : "nl-btn--primary"}`}
               >
                 {claudeSaid[b.id] === "Sending…" ? "Sending…" : b.claudeUrl ? "Send to Claude Again" : "Send to Claude"}
@@ -603,6 +645,15 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
         )}
       </div>
 
+      {more && claude.canSend && (
+        <div className="nl-adm-task">
+          <button type="button" disabled={!claude.ready} onClick={() => setAsking({ bug: null, answer: false })} className="nl-btn nl-btn--primary nl-btn--sm">
+            New Task for Claude
+          </button>
+          <span className="nl-meta">Anything you want done, in your own words. No ticket or screenshot needed.</span>
+        </div>
+      )}
+
       {claude.canSend && !claude.ready && (
         <p className="nl-meta nl-adm-warn">Send to Claude is built but not connected yet: the routine&apos;s address and key go on Railway.</p>
       )}
@@ -654,6 +705,24 @@ export default function TicketsNew({ state }: { state: "loading" | { err: string
           </summary>
           <ul className="nl-adm-rows">{working.map(row)}</ul>
         </details>
+      )}
+      {asking && (
+        <TellClaude
+          bug={asking.bug}
+          answer={asking.answer}
+          onClose={() => setAsking(null)}
+          onSend={async (words) => {
+            if (!asking.bug) {
+              const said = newTask ? await newTask(words) : "Not available.";
+              if (!said) setAsking(null);
+              return said;
+            }
+            const id = asking.bug.id;
+            setAsking(null);
+            await sendToClaude(id, words);
+            return "";
+          }}
+        />
       )}
       {telling && <TellThem bug={telling} onClose={() => setTelling(null)} onSend={async (story) => { await patch(telling.id, { state: "fixed", story }); setTelling(null); }} />}
     </Tab>
@@ -713,6 +782,95 @@ function TellThem({ bug, onClose, onSend }: { bug: Bug; onClose: () => void; onS
             value={story}
             onChange={(e) => setStory(e.target.value)}
             placeholder="The Save button was quietly failing when a landlord had no email address. It now saves either way and tells you if anything is missing."
+          />
+        </label>
+      </FloatCard>
+    </FloatSheet>
+  );
+}
+
+
+/**
+ * Tell Claude (James, 26 Nov 2026: "give it more context, so when I click
+ * Send to Claude it can fix more types of issues"). What he types is the
+ * run's instructions, kept on the ticket (lib/claude-tickets); the reporter's
+ * words never are. The quick picks write the usual ones for him. The same
+ * box answers Claude's question, and with no ticket it is a New Task.
+ */
+const PICKS: Array<{ label: string; say: string; answer?: boolean }> = [
+  { label: "Go With Your Recommendation", say: "Go with your recommendation.", answer: true },
+  { label: "Fix It", say: "Fix it." },
+  { label: "Build It", say: "Build it. Anything new goes behind its own switch, set to Only me." },
+  { label: "Answer Them", say: "Don't change anything. Write the answer for them." },
+  { label: "Look Into It", say: "Find the cause and tell me what you would change. Don't change anything yet." },
+];
+
+function TellClaude({ bug, answer, onClose, onSend }: { bug: Bug | null; answer: boolean; onClose: () => void; onSend: (words: string) => Promise<string> }) {
+  const [words, setWords] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState("");
+  const task = !bug;
+  const asked = bug && answer ? (bug.botNote ?? "").split("\n").find((l) => l.trim()) ?? "" : "";
+  const ok = task ? words.trim().length >= 8 : answer ? words.trim().length > 0 : true;
+  const add = (say: string) => setWords((w) => (w.trim() ? `${w.trim()} ${say}` : say));
+  return (
+    <FloatSheet
+      title={task ? "New Task for Claude" : answer ? "Answer Claude" : "Send to Claude"}
+      onClose={onClose}
+      dismissible={!busy}
+      question={task ? "What do you want done?" : answer ? "What's your answer?" : "What do you want Claude to do?"}
+      lede="Your words are Claude's instructions. It never writes to REX, PayProp or Propoly, never sends anything to a customer, and puts anything new behind a switch set to Only me. Nothing goes live until you press Push It Live."
+      foot={
+        <FloatFoot left={<span className="nl-meta">{said ? said : task ? "It goes to Claude as a ticket of your own" : words.trim() ? "Claude gets this with everything said so far" : answer ? "Pick one or type your answer" : "Empty: Claude works out what's needed"}</span>}>
+          <button type="button" className="nl-btn nl-btn--secondary" disabled={busy} onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="nl-btn nl-btn--primary"
+            disabled={busy || !ok}
+            onClick={async () => {
+              setBusy(true);
+              setSaid("");
+              const out = await onSend(words.trim());
+              setBusy(false);
+              if (out) setSaid(out);
+            }}
+          >
+            {busy ? "Sending…" : answer ? "Send My Answer" : "Send to Claude"}
+          </button>
+        </FloatFoot>
+      }
+    >
+      {bug && (
+        <FloatCard>
+          <span className="nl-fs-label">{answer ? "Claude asked" : bug.kind === "task" ? "Your task" : "They told us"}</span>
+          <p className="mt-1.5 line-clamp-4 text-[13.5px] leading-relaxed text-muted">{answer && asked ? asked : bug.body}</p>
+        </FloatCard>
+      )}
+      <FloatCard>
+        <div className="nl-tc-picks" role="group" aria-label="Quick picks">
+          {PICKS.filter((p) => (p.answer ? answer : !task || p.label === "Build It" || p.label === "Look Into It")).map((p) => (
+            <button key={p.label} type="button" className="nl-btn nl-btn--secondary nl-btn--sm" onClick={() => add(p.say)}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <label className="mt-3 block">
+          <span className="nl-fs-label">{task ? "The task" : answer ? "Your answer" : "Tell Claude"}</span>
+          <textarea
+            className="nl-fs-input mt-1.5"
+            rows={task ? 6 : 4}
+            maxLength={4000}
+            value={words}
+            onChange={(e) => setWords(e.target.value)}
+            placeholder={
+              task
+                ? "On the Applications board, add a filter for applications waiting on references. New look only."
+                : answer
+                  ? "Yes, do it for every agent. Leave the old screen as it is."
+                  : "Change the button to say Send Terms, and do the same on the phone app."
+            }
           />
         </label>
       </FloatCard>

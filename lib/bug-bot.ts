@@ -316,7 +316,8 @@ export async function tellReporter(id: string, origin: string): Promise<boolean>
     [id]
   ).catch(() => []);
   const b = rows[0];
-  if (!b || b.told_at || b.kind === "auto" || !b.reporter_email.includes("@") || !isInternalAddress(b.reporter_email)) return false;
+  /* A task James set himself (lib/claude-tickets newTaskForClaude) needs no "great news" email to him. */
+  if (!b || b.told_at || b.kind === "auto" || b.kind === "task" || !b.reporter_email.includes("@") || !isInternalAddress(b.reporter_email)) return false;
   if (quietWhenFixed(b.reporter_email)) return false;
 
   /* Steve tells them too, the next time they are in the OS or straight away

@@ -141,13 +141,24 @@ export default function Tickets() {
   /* One press: the ticket goes to a Claude Code session on James's own plan
      and leaves the open list until Claude has something for him. What went
      wrong, if anything, is said on the ticket itself. */
-  async function sendToClaude(id: string) {
+  async function sendToClaude(id: string, say = ""): Promise<boolean> {
     setClaudeSaid((m) => ({ ...m, [id]: "Sending…" }));
-    const j = await fetch("/api/bugs/claude", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id }) })
+    const j = await fetch("/api/bugs/claude", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, say }) })
       .then((r) => r.json().catch(() => ({ ok: false })))
       .catch(() => ({ ok: false })) as { ok?: boolean; error?: string };
     setClaudeSaid((m) => ({ ...m, [id]: j.ok ? "" : j.error || "Couldn't send it to Claude." }));
     await load();
+    return Boolean(j.ok);
+  }
+
+  /* New Task for Claude (26 Nov 2026): James types something he wants done,
+     with no ticket or screenshot behind it, and it goes in one press. */
+  async function newTask(words: string): Promise<string> {
+    const j = await fetch("/api/bugs/claude", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ task: words }) })
+      .then((r) => r.json().catch(() => ({ ok: false })))
+      .catch(() => ({ ok: false })) as { ok?: boolean; error?: string };
+    await load();
+    return j.ok ? "" : j.error || "Couldn't send it to Claude.";
   }
 
   /* Push It Live: Claude's pull request merged from here (lib/github-pr), so
@@ -163,6 +174,8 @@ export default function Tickets() {
 
   /* The new look (lib/new-look "admin", 24 Oct 2026). Null until known. */
   const look = useNewLook("admin");
+  /* Tell Claude, Answer Claude and New Task (switch "claudemore", 26 Nov 2026). */
+  const more = useNewLook("claudemore") === true;
   if (look === null) return <p className="mt-6 text-[12.5px] text-muted">Loading the tickets…</p>;
   if (look && (err || !bugs)) return <TicketsNew state={err ? { err, retry: () => { setErr(null); void load(); } } : "loading"} />;
 
@@ -189,7 +202,7 @@ export default function Tickets() {
   if (look) {
     return (
       <TicketsNew
-        state={{ people, auto, pick, counts, laterCount, putRight, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict, claude, claudeSaid, sendToClaude, pushSaid, pushClaude }}
+        state={{ people, auto, pick, counts, laterCount, putRight, show, setShow, letter, setLetter, shots, media, loadShot, loadMedia, openId, patch, verdict, claude, claudeSaid, sendToClaude, pushSaid, pushClaude, more, newTask }}
       />
     );
   }

@@ -8,6 +8,9 @@
  *   node scripts/claude-ticket.mjs report <state> <note-file> [pr-url] [branch] [reply-file]
  *        [--shot picture]... [--do /screen/path --point data-steve-handle --label "Button Words"]
  *        [--told how-we-fixed-it-file]
+ *   node scripts/claude-ticket.mjs look                 → the live look-ups there are, and what each takes
+ *   node scripts/claude-ticket.mjs look <name> ['{"json":"input"}']
+ *                                                       → one live, read-only answer (26 Nov 2026)
  *
  * state is fix_ready, needs_you or not_a_bug. Each --shot (PNG, JPEG or WebP,
  * up to four) is put on the ticket first, so James sees them with the report.
@@ -39,6 +42,38 @@ if (cmd === "read") {
   }
   writeFileSync("ticket.json", JSON.stringify(ticket, null, 2));
   console.log(`ticket.json written${ticket.shot ? ", screen saved as shot.jpg" : ", no screenshot"}; ${ticket.media.length} attachment(s).`);
+} else if (cmd === "look") {
+  /* Live records, read only, as James (lib/claude-ticket-look). Prints the answer; keep it out of the repository. */
+  const [tool, raw = "{}"] = args;
+  if (!tool) {
+    const res = await fetch(`${OS}/api/bugs/claude/look?id=${encodeURIComponent(ID)}&t=${encodeURIComponent(TOKEN)}`);
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.ok) {
+      console.error(`The OS said ${res.status}: ${j.error ?? "no answer"}`);
+      process.exit(1);
+    }
+    console.log(`Up to ${j.cap} look-ups per send.\n`);
+    for (const l of j.lookUps) console.log(`${l.name}\n  ${l.description}\n  input: ${JSON.stringify(l.input_schema?.properties ?? {})}\n`);
+  } else {
+    let input;
+    try {
+      input = JSON.parse(raw);
+    } catch {
+      console.error(`The input must be JSON, e.g. '{"find":"4 Hermosa Road"}'.`);
+      process.exit(2);
+    }
+    const res = await fetch(`${OS}/api/bugs/claude/look`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: ID, t: TOKEN, tool, input }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.ok) {
+      console.error(`The OS said ${res.status}: ${j.error ?? "no answer"}`);
+      process.exit(1);
+    }
+    console.log(JSON.stringify(j.answer, null, 2));
+  }
 } else if (cmd === "report") {
   const shots = [];
   const plain = [];
@@ -87,6 +122,6 @@ if (cmd === "read") {
   }
   console.log(`Reported ${state}.`);
 } else {
-  console.error("read | report");
+  console.error("read | look [name] [json-input] | report");
   process.exit(2);
 }

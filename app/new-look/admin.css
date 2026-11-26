@@ -647,3 +647,8 @@
 /* Review Later picker on a ticket (Tickets, 12 Nov 2026): quick days, a date, then Move to Later. */
 [data-look="new"] .nl-adm-later { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); }
 [data-look="new"] .nl-adm-later-date { height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--page, transparent); color: inherit; font: inherit; font-size: 13px; max-width: 100%; }
+
+/* Tell Claude, Answer Claude, New Task for Claude (switch claudemore, 26 Nov 2026). */
+[data-look="new"] .nl-adm-task { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 4px 0 14px; }
+[data-look="new"] .nl-adm-told { margin-top: 6px; padding-left: 10px; border-left: 2px solid var(--accent, #a85a51); display: grid; gap: 2px; }
+.nl-tc-picks { display: flex; flex-wrap: wrap; gap: 6px; }

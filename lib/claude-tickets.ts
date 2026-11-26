@@ -72,6 +72,49 @@ export interface TicketForClaude {
   previousNote: string;
   /** Their other reports this week, so a duplicate is seen as one. */
   sameReporterRecent: Array<{ id: string; at: string; state: string; body: string }>;
+  /** What James typed when he sent it, oldest first: his instructions (see ClaudeTurn). */
+  james: string[];
+  /** Every send and every answer on this ticket, oldest first, so a second send picks up where the first stopped. */
+  thread: ClaudeTurn[];
+  /** The live look-ups this session may ask for (POST /api/bugs/claude/look). */
+  lookUps: string[];
+}
+
+/**
+ * MORE THAN BUGS (James, 26 Nov 2026): "Is there a way we can give it more
+ * context, so when I click Send to Claude it can fix more types of issues?
+ * ... rather than having to screenshot them, send them to you, and then you
+ * do them."
+ *
+ * Three things a run lacked, all fixed here:
+ *
+ *   - James's own words. Until now a run had only the reporter's, and the
+ *     playbook (rightly) never takes a reporter's words as instructions, so
+ *     anything past a code fault came back as a question. James now types
+ *     what he wants as he sends ("Build it", "Change the wording to...", "Go
+ *     with your recommendation"). They are stored on the ticket by a press
+ *     only he can make and handed to the run as `james`, which the playbook
+ *     treats as his say-so, inside its hard limits.
+ *   - The history. Send Again overwrote Claude's last note, so a run sent
+ *     back with an answer never saw the question. Every turn is kept now.
+ *   - Live records. A run could not see the database, so anything about one
+ *     home came back as "look this up". It can now ask Steve's read-only
+ *     look-ups as James (lib/claude-ticket-look).
+ */
+export interface ClaudeTurn {
+  at: string;
+  who: "james" | "claude";
+  text: string;
+  /** Claude's turns: fix_ready, needs_you or not_a_bug. */
+  state?: string;
+}
+
+export function threadOf(context: Record<string, unknown> | null | undefined): ClaudeTurn[] {
+  const t = context?.claudeThread;
+  if (!Array.isArray(t)) return [];
+  return t
+    .filter((x): x is ClaudeTurn => Boolean(x) && typeof x === "object" && typeof (x as ClaudeTurn).text === "string" && ((x as ClaudeTurn).who === "james" || (x as ClaudeTurn).who === "claude"))
+    .map((x) => ({ at: String(x.at ?? ""), who: x.who, text: x.text, ...(x.state ? { state: String(x.state) } : {}) }));
 }
 
 export async function ticketForClaude(id: string): Promise<TicketForClaude | null> {
@@ -108,6 +151,9 @@ export async function ticketForClaude(id: string): Promise<TicketForClaude | nul
     media: await mediaFor(id, "reporter").catch(() => []),
     previousNote: b.bot_note,
     sameReporterRecent: recent.map((r) => ({ id: r.id, at: new Date(r.created_at).toISOString(), state: r.state, body: r.body })),
+    james: threadOf(b.context).filter((x) => x.who === "james").map((x) => x.text),
+    thread: threadOf(b.context),
+    lookUps: (await import("@/lib/claude-ticket-look")).LOOK_UP_NAMES,
   };
 }
 
@@ -153,8 +199,12 @@ export function claudeConfigured(): boolean {
  * repository, so how a ticket is worked can change with a commit; this is only
  * the ticket.
  */
-export function briefFor(t: { id: string; body: string; path: string; reporter: string; kind: string }, origin: string): string {
+export function briefFor(t: { id: string; body: string; path: string; reporter: string; kind: string; jamesWrote?: boolean }, origin: string): string {
   const said = t.body.length > 1500 ? `${t.body.slice(0, 1500)}…` : t.body;
+  /* James's own words are NOT in this text on purpose: a fire payload is
+     untrusted by design. They are on the ticket, read through the token
+     (`james` in ticket.json), where only his press can have put them. */
+  const note = t.jamesWrote ? ["", "James wrote to you on this ticket when he sent it: read `james` and `thread` in ticket.json before anything else."] : [];
   return [
     `TLE OS ticket ${t.id}. Work it by following docs/CLAUDE-TICKETS.md in this repository.`,
     "",
@@ -162,9 +212,38 @@ export function briefFor(t: { id: string; body: string; path: string; reporter: 
     `ID=${t.id}`,
     `TOKEN=${ticketToken(t.id)}`,
     "",
-    `Raised by ${t.reporter || "the OS itself"}${t.path ? ` on ${t.path}` : ""} (${t.kind}):`,
+    t.kind === "task"
+      ? `A task James set himself${t.path ? ` on ${t.path}` : ""}:`
+      : `Raised by ${t.reporter || "the OS itself"}${t.path ? ` on ${t.path}` : ""} (${t.kind}):`,
     said,
+    ...note,
   ].join("\n");
+}
+
+/**
+ * New Task for Claude (James, 26 Nov 2026): something he wants done that
+ * nobody reported, typed on Tickets and sent in the same press, with no
+ * screenshot to take. It is a ticket of kind "task" with James as the
+ * reporter, so it lives, comes back and is pushed like any other; nobody is
+ * emailed when it ships (lib/bug-bot tellReporter leaves tasks out).
+ */
+export async function newTaskForClaude(
+  words: string,
+  path: string,
+  sender: { id: string; email: string; name: string },
+  origin: string
+): Promise<{ id: string; url: string }> {
+  if (!hasDb()) throw new ClaudeRefused("No database here.");
+  if (!claudeConfigured()) throw new ClaudeRefused("Claude isn't connected yet: the routine's address and key aren't set on Railway.");
+  const body = words.replace(/\r/g, "").trim().slice(0, 4000);
+  if (body.length < 8) throw new ClaudeRefused("Say a little more about what you want done.");
+  const where = /^\/(?!\/)[A-Za-z0-9\-._~/?=&%:+]{0,300}$/.test(path.trim()) ? path.trim() : "";
+  const { logBug } = await import("@/lib/pilot");
+  const id = await logBug({ reporterId: sender.id, reporterEmail: sender.email, body, path: where, kind: "task", context: { setBy: "james" } });
+  if (!id) throw new ClaudeRefused("Couldn't save the task.");
+  /* The task's own words are James's, so they go on the thread as his. */
+  const { url } = await sendToClaude(id, sender.name || sender.email, origin, { say: body, sender });
+  return { id, url };
 }
 
 /* ── Do It: the button Claude's answer is about ─────────────────────────── */
@@ -205,11 +284,17 @@ export class ClaudeRefused extends Error {}
  * list at once (with_claude) and comes back only if Claude needs him. The
  * link to watch the session, when the routine gives one, is kept beside it.
  */
-export async function sendToClaude(id: string, by: string, origin: string): Promise<{ url: string }> {
+export async function sendToClaude(
+  id: string,
+  by: string,
+  origin: string,
+  /** What James typed as he sent it, and who he is (the look-ups run as him). */
+  opts: { say?: string; sender?: { id: string; email: string } } = {}
+): Promise<{ url: string }> {
   if (!hasDb()) throw new ClaudeRefused("No database here.");
   if (!claudeConfigured()) throw new ClaudeRefused("Claude isn't connected yet: the routine's address and key aren't set on Railway.");
-  const rows = await q<{ id: string; body: string; path: string; reporter_email: string; kind: string; state: string; bot_state: string; bot_at: Date | null }>(
-    `SELECT id, body, path, reporter_email, kind, state, bot_state, bot_at FROM os_bugs WHERE id = $1`,
+  const rows = await q<{ id: string; body: string; path: string; reporter_email: string; kind: string; state: string; bot_state: string; bot_at: Date | null; bot_note: string; context: Record<string, unknown> | null }>(
+    `SELECT id, body, path, reporter_email, kind, state, bot_state, bot_at, bot_note, context FROM os_bugs WHERE id = $1`,
     [id]
   );
   const t = rows[0];
@@ -221,7 +306,21 @@ export async function sendToClaude(id: string, by: string, origin: string): Prom
     throw new ClaudeRefused("Claude is already on this one.");
   }
 
-  const text = briefFor({ id: t.id, body: t.body, path: t.path, reporter: t.kind === "auto" ? "" : t.reporter_email, kind: t.kind }, origin);
+  /* The thread: Claude's last answer (before Send Again overwrites the note)
+     and what James says now. */
+  const thread = threadOf(t.context);
+  const now = new Date().toISOString();
+  const lastNote = (t.bot_note ?? "").trim();
+  if (["fix_ready", "needs_you", "not_a_bug"].includes(t.bot_state) && lastNote && !thread.some((x) => x.who === "claude" && x.text === lastNote)) {
+    thread.push({ at: t.bot_at ? new Date(t.bot_at).toISOString() : now, who: "claude", text: lastNote, state: t.bot_state });
+  }
+  const say = (opts.say ?? "").replace(/\r/g, "").trim().slice(0, 4000);
+  if (say) thread.push({ at: now, who: "james", text: say });
+
+  const text = briefFor(
+    { id: t.id, body: t.body, path: t.path, reporter: t.kind === "auto" ? "" : t.reporter_email, kind: t.kind, jamesWrote: thread.some((x) => x.who === "james") },
+    origin
+  );
   /* POST .../routines/trig_.../fire (claude.ai routines, research preview,
      checked 4 Nov 2026). It answers once the session exists, with its link;
      there is no idempotency key, so a press is never retried from here: a
@@ -253,9 +352,11 @@ export async function sendToClaude(id: string, by: string, origin: string): Prom
   const url = typeof out.claude_code_session_url === "string" && out.claude_code_session_url.startsWith("https://") ? out.claude_code_session_url : "";
   await q(
     `UPDATE os_bugs SET bot_state = 'with_claude', bot_at = NOW(), bot_pr = '', bot_branch = '',
-            bot_note = $2, claude_url = $3
+            bot_note = $2, claude_url = $3,
+            context = coalesce(context, '{}'::jsonb) || jsonb_build_object('claudeThread', $4::jsonb, 'claudeLooks', 0)
+                      || CASE WHEN $5::text <> '' THEN jsonb_build_object('claudeSender', jsonb_build_object('id', $5::text, 'email', $6::text)) ELSE '{}'::jsonb END
       WHERE id = $1`,
-    [id, `Sent to Claude by ${by}.`, url]
+    [id, `Sent to Claude by ${by}.`, url, JSON.stringify(thread.slice(-30)), opts.sender?.id ?? "", opts.sender?.email ?? ""]
   );
   return { url };
 }

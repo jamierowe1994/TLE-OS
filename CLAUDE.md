@@ -29,7 +29,8 @@ compliance → portfolio → finance.
 - A commit that fixes a ticket adds `tickets/shipped/<ticket id>.json` (see `tickets/README.md`). The ticket
   closes itself and the reporter is emailed when that deploy is live. No hand-ticking after a push.
 - Send to Claude (Admin > Tickets) hands a ticket to a claude.ai routine on James's plan; the routine follows
-  `docs/CLAUDE-TICKETS.md`.
+  `docs/CLAUDE-TICKETS.md`. James can add instructions as he sends (Tell Claude), answer its questions, or type
+  a New Task with no ticket; a run reads live records read-only with `scripts/claude-ticket.mjs look`.
 
 ## Verification
 
