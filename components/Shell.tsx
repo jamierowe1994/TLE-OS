@@ -9,6 +9,7 @@ import SignedOutWatch from "@/components/SignedOutWatch";
 import SearchPalette, { OPEN_SEARCH } from "@/components/SearchPalette";
 import DoodleIcon from "@/components/DoodleIcon";
 import LaunchNav from "@/components/LaunchNav";
+import { ChristmasLayer } from "@/components/christmas/Decor";
 import { useNewLook } from "@/lib/use-new-look";
 import { readTheme, type ThemeChoice } from "@/lib/theme";
 import { FRONT, BACK, railFor, type NavItem } from "@/lib/nav";
@@ -409,6 +410,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             {children}
           </div>
         </main>
+        {/* Snow and bunting on the dashboard, with the Christmas look on (lib/christmas). */}
+        <ChristmasLayer pathname={pathname} />
       </div>
     </div>
   );

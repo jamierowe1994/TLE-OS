@@ -5,6 +5,7 @@ import Link from "next/link";
 import { OPEN_SEARCH } from "@/components/SearchPalette";
 import LineIcon from "@/components/LineIcon";
 import Wordmark from "@/components/Wordmark";
+import { ChristmasTile, FairyLights, Holly } from "@/components/christmas/Decor";
 import NotificationBell from "@/components/NotificationBell";
 import { warmRoute } from "@/lib/route-warm";
 import type { NavItem } from "@/lib/nav";
@@ -257,7 +258,11 @@ export default function LaunchNav({
   const r = look ? rowNew : row;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="relative flex h-full min-h-0 flex-col">
+      {/* Fairy lights along the top, with the Christmas look on (lib/christmas). */}
+      <span className="xmas-lights-slot" aria-hidden>
+        <FairyLights />
+      </span>
       {/* The workspace, and the collapse. */}
       {/* Just the wordmark, no box round it (James, 11 Oct 2026). Collapsed,
           it is the OS on its own, as the old rail did. */}
@@ -265,6 +270,11 @@ export default function LaunchNav({
         /* The design's head: the wordmark in small capitals, the bell and the collapse. */
         <div className={`nl-nav-head${collapsed ? " is-tight" : ""}`}>
           <span className="nl-nav-logo" aria-label="TLE OS">{collapsed ? "OS" : "TLE OS"}</span>
+          {!collapsed && (
+            <span className="xmas-holly-slot" aria-hidden>
+              <Holly />
+            </span>
+          )}
           {!collapsed && (
             <>
               <span className="flex-1" />
@@ -278,6 +288,11 @@ export default function LaunchNav({
       ) : (
       <div className={`flex h-9 items-center ${collapsed ? "justify-center" : "gap-2 px-2"}`}>
         <Wordmark collapsed={collapsed} size={21} />
+        {!collapsed && (
+          <span className="xmas-holly-slot" aria-hidden>
+            <Holly />
+          </span>
+        )}
         {!collapsed && (
           <>
             <span className="flex-1" />
@@ -315,6 +330,8 @@ export default function LaunchNav({
       </nav>
 
       <ul className={look ? "nl-nav-foot" : "space-y-px pt-2"}>
+        {/* "Try the new Christmas look", above Help, in the season only (lib/christmas). */}
+        <ChristmasTile collapsed={collapsed} look={look} />
         <li>
           <Link href="/guides" data-os-help title={collapsed ? "Help" : undefined} className={r(pathname.startsWith("/guides"), collapsed)}>
             <LineIcon name="help" size={look ? 17 : undefined} className={look ? "" : "text-[var(--launch-icon)] group-hover:text-ink"} />
