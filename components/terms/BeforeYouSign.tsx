@@ -360,6 +360,15 @@ export default function BeforeYouSign(p: BeforeProps) {
         return (
           <>
             <Head title={screen.step.title} blurb={screen.step.blurb} />
+            <p className="tq-legend">
+              {screen.step.questions.some((q) => !q.optional) ? (
+                <>
+                  <b>*</b> needs an answer. Anything else can be left blank.
+                </>
+              ) : (
+                "Nothing here has to be answered. Fill in what you know and carry on."
+              )}
+            </p>
             {(p.askAgain ?? []).includes(screen.step.id) && screen.step.questions.some((q) => asked(q, answers) && (fromFileAns.has(q.id) || filled(p.answers[q.id]))) ? (
               <p className="bys-file">We&apos;ve filled in what we already had. Check it&apos;s still right, and change anything that isn&apos;t.</p>
             ) : null}

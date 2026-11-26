@@ -1,6 +1,6 @@
 "use client";
 
-import { KEPT, asked, cardAsked, cardKey, type Answers, type Question } from "@/lib/property-questions";
+import { DONT_KNOW, KEPT, asked, canSayDontKnow, cardAsked, cardKey, type Answers, type Question } from "@/lib/property-questions";
 
 /**
  * ONE QUESTION ABOUT THE HOME, as the landlord's "before you sign" screens
@@ -42,7 +42,13 @@ export default function QuestionField({
     <div className="tq-q">
       <label className="tq-l" htmlFor={q.kind === "choice" ? undefined : id}>
         {q.label}
-        {q.optional ? <span className="tq-opt">Optional</span> : null}
+        {/* A star on what must be answered (Susan's sheet, 26 Nov 2026); everything else can be left blank. */}
+        {q.optional ? null : (
+          <span className="tq-must">
+            <span aria-hidden>*</span>
+            <span className="tq-sr"> (needs an answer)</span>
+          </span>
+        )}
       </label>
       {q.help ? <p className="tq-help">{q.help}</p> : null}
 
@@ -90,6 +96,14 @@ export default function QuestionField({
               </button>
             );
           })}
+        </div>
+      ) : null}
+
+      {!locked && !kept && canSayDontKnow(q) ? (
+        <div className="tq-chips tq-dk">
+          <button type="button" className={value === DONT_KNOW ? "on" : ""} onMouseDown={(e) => e.preventDefault()} onClick={() => onChange(q.id, value === DONT_KNOW ? "" : DONT_KNOW)}>
+            Don&rsquo;t know
+          </button>
         </div>
       ) : null}
 

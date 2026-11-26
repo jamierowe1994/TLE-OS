@@ -5,6 +5,8 @@ import DoodleIcon from "@/components/DoodleIcon";
 import UploadDoc from "@/components/landlord/UploadDoc";
 import {
   KEPT,
+  DONT_KNOW,
+  canSayDontKnow,
   PROPERTY_QUESTIONS,
   allDone,
   asked,
@@ -299,6 +301,15 @@ export default function PropertyQuestions({
           <div className="min-w-0">
             <h3 className="text-[21px] leading-tight">{step.title}</h3>
             <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted">{step.blurb}</p>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+              {step.questions.some((q) => !q.optional) ? (
+                <>
+                  <span className="font-semibold text-accent">*</span> needs an answer. Anything else can be left blank.
+                </>
+              ) : (
+                "Nothing here has to be answered. Fill in what you know and carry on."
+              )}
+            </p>
           </div>
         </div>
 
@@ -375,7 +386,13 @@ function Field({
     <div>
       <label className="block text-[14px] font-semibold leading-snug">
         {q.label}
-        {q.optional && <span className="ml-2 text-[11px] font-normal text-muted">optional</span>}
+        {/* A star on what must be answered (Susan's sheet, 26 Nov 2026); everything else can be left blank. */}
+        {!q.optional && (
+          <span className="ml-1 font-semibold text-accent">
+            <span aria-hidden>*</span>
+            <span className="sr-only"> (needs an answer)</span>
+          </span>
+        )}
       </label>
       {q.help && <p className="mt-1 text-[12px] leading-relaxed text-muted">{q.help}</p>}
 
@@ -447,6 +464,20 @@ function Field({
             className={`${FIELD} resize-y`}
           />
         )}
+
+        {/* One press when they do not know (James, 26 Nov 2026). */}
+        {canSayDontKnow(q) && chosen !== KEPT ? (
+          <div className="mt-2.5">
+            <button
+              type="button"
+              onClick={() => onChange(chosen === DONT_KNOW ? "" : DONT_KNOW)}
+              className="rounded-full border border-dashed px-3 py-1 text-[12.5px] transition"
+              style={chosen === DONT_KNOW ? { background: "#56423e", borderColor: "#56423e", color: "#fff", borderStyle: "solid" } : { borderColor: "rgba(86,66,62,0.35)", background: "transparent" }}
+            >
+              Don&rsquo;t know
+            </button>
+          </div>
+        ) : null}
 
         {/* The usual answers, one tap each. A chip fills the box (or adds to
             it, where several things are listed) and the box stays theirs to

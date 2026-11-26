@@ -104,7 +104,8 @@ export interface QuestionStep {
 
 export type Answers = Record<string, string | string[] | undefined>;
 
-export const PROPERTY_QUESTIONS: QuestionStep[] = [
+/** The questions as written. Which of them must be answered is decided below, in one place (MUST). */
+const AS_WRITTEN: QuestionStep[] = [
   {
     id: "access",
     title: "Who's There and Keys",
@@ -624,6 +625,58 @@ export const PROPERTY_QUESTIONS: QuestionStep[] = [
   },
 ];
 
+/**
+ * WHAT MUST BE ANSWERED (Susan Liles's sheet, 26 Nov 2026; James: "we should
+ * allow the landlord to be able to skip these questions, as they're not
+ * mandatory ... some of the landlords are currently stuck because they don't
+ * know the details").
+ *
+ * Until now nearly every question was required, so a landlord who did not
+ * know where the stopcock was could not reach the contract. Susan marked what
+ * is mandatory: the gas answers, the three certificate answers, how the home
+ * is heated, and any cover or maintenance plans. Everything else can be left
+ * blank. This list is the only place that says so; `optional` on a question
+ * as written above no longer decides it.
+ *
+ * The rule is code, not something stored on a contract, so it applies to
+ * every contract already out as soon as it is live: nobody has to be re-sent.
+ */
+const MUST = new Set([
+  /* Gas (always the landlord's to answer) */
+  "gas-supply",
+  "gas-appliances",
+  "gas",
+  "gas-meter",
+  "gas-supplier",
+  /* Certificates */
+  "eicr",
+  "epc",
+  "certs-held-by",
+  /* Heating and Boiler */
+  "heating-type",
+  "boiler-cover",
+]);
+
+/**
+ * "Don't know" (James, 26 Nov 2026: "say you don't know, or the model of
+ * boiler or whatever, you should just be able to click 'no' to them"). One
+ * press on any typed answer that is not a code. On a question that must be
+ * answered it counts as the answer, so nobody is stuck on a fact they do not
+ * have, and staff see that it was not known.
+ */
+export const DONT_KNOW = "Don't know";
+/** Answers that mean they do not know: the button's, and the "Not sure" chip many questions already carry. */
+const UNKNOWN = new Set([DONT_KNOW.toLowerCase(), "not sure"]);
+export const saysUnknown = (v: Answers[string]): boolean => typeof v === "string" && UNKNOWN.has(v.trim().toLowerCase());
+/** Offer the button on a typed answer that is not a code and has no "Not sure" chip of its own. */
+export const canSayDontKnow = (q: Question): boolean =>
+  q.kind === "text" && !q.secret && !(q.suggestions ?? []).some((x) => UNKNOWN.has(x.trim().toLowerCase()));
+
+export const PROPERTY_QUESTIONS: QuestionStep[] = AS_WRITTEN.map((s) => ({
+  ...s,
+  questions: s.questions.map((q) => ({ ...q, optional: !MUST.has(q.id) })),
+}));
+
 /** Every question that has to be answered before a step counts as done. */
 export function required(step: QuestionStep, answers: Answers = {}): Question[] {
   return step.questions.filter((q) => !q.optional && asked(q, answers));
@@ -643,14 +696,16 @@ export const filled = (v: Answers[string]) =>
 export const cardKey = (id: string) => `${id}-card`;
 export function cardAsked(q: Question, answers: Answers): boolean {
   const v = answers[q.id];
-  return Boolean(q.card) && typeof v === "string" && v.trim() !== "" && !(q.noMeter ?? []).includes(v.trim());
+  /* A meter they cannot place is not asked whether it takes a card. */
+  return Boolean(q.card) && typeof v === "string" && v.trim() !== "" && !saysUnknown(v) && !(q.noMeter ?? []).includes(v.trim());
 }
 
 /** This question still wants something: the answer itself, or whether its meter takes a card. */
 export function wants(q: Question, answers: Answers): boolean {
   if (!asked(q, answers)) return false;
   if (!q.optional && !filled(answers[q.id])) return true;
-  return cardAsked(q, answers) && !filled(answers[cardKey(q.id)]);
+  /* Whether a meter takes a card is only insisted on where the meter itself must be answered (the gas meter). */
+  return !q.optional && cardAsked(q, answers) && !filled(answers[cardKey(q.id)]);
 }
 
 export function stepDone(step: QuestionStep, answers: Answers): boolean {
