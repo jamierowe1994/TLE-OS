@@ -35,7 +35,7 @@ import { attr, attrStr, relId, relIds, teamtailorConfigured, teamtailorList, tea
  * never as an old number.
  */
 
-const SNAP_KEY = "recruitment:v1";
+const SNAP_KEY = "recruitment:v2";
 const STATUS_KEY = "recruitment:status";
 const SCOPE_KEY = "recruitment_scope";
 /** Refresh once the figures are this old. */
@@ -78,11 +78,13 @@ interface JobSnap {
   locations: string[];
   /** Active applications in each kind of stage, as Teamtailor counts them now. */
   stages: Record<StageKind, number>;
+  /** The same, by the vacancy's own step names, in its own order (Hired left out). */
+  steps: { name: string; n: number }[];
   months: Record<string, MonthCounts>;
 }
 
 interface Snapshot {
-  v: 1;
+  v: 2;
   syncedAt: string;
   /** The oldest month held, "YYYY-MM". */
   from: string;
@@ -141,15 +143,20 @@ export interface RecruitmentFigures {
     byThem: number;
   };
   pipeline: { kind: StageKind; n: number }[];
+  /** People still being considered on live vacancies, by the account's own step names, in order. */
+  funnel: { name: string; n: number }[];
+  /** People still marked active on vacancies that are no longer live. */
+  onClosedVacancies: number;
+  /** False when the account has sent no offers through Teamtailor in the window. */
+  offersUsed: boolean;
   sources: { name: string; n: number }[];
   reasons: { reason: string; n: number; by: "us" | "them" | null }[];
   trend: { month: string; applied: number; hired: number }[];
+  /** One line per role: adverts with the same title are one role advertised in many places. */
   vacancies: {
-    id: string;
     title: string;
-    where: string | null;
-    status: string;
-    live: boolean;
+    adverts: number;
+    liveAdverts: number;
     openings: number | null;
     applied: number;
     inProcess: number;
@@ -202,7 +209,7 @@ const mem: { snap: { data: Snapshot; at: number } | null; status: RunStatus | nu
 
 async function loadSnap(): Promise<{ data: Snapshot; at: number } | null> {
   const stored = await readCache<Snapshot>(SNAP_KEY);
-  if (stored && stored.data?.v === 1 && (!mem.snap || stored.at >= mem.snap.at)) mem.snap = stored;
+  if (stored && stored.data?.v === 2 && (!mem.snap || stored.at >= mem.snap.at)) mem.snap = stored;
   return mem.snap;
 }
 
@@ -299,16 +306,24 @@ async function walk(): Promise<Snapshot> {
           const l = jobsList.included.get(`locations:${id}`);
           return attrStr(l, "name") ?? attrStr(l, "city");
         })
-        .filter((x): x is string => Boolean(x)),
+        .filter((x): x is string => Boolean(x))
+        /* One advert listed in sixty towns says nothing about where it is, and
+           sixty names on each of seven hundred adverts is most of the cache. */
+        .filter((_, __, all) => all.length <= 3),
       stages: emptyStages(),
+      steps: [],
       months: {},
     };
+    const own: { name: string; n: number; order: number }[] = [];
     for (const sid of relIds(j, "stages")) {
       jobOfStage.set(sid, j.id);
       const s = jobsList.included.get(`stages:${sid}`);
       if (s) noteStage(s);
-      snap.stages[stageKind.get(sid) ?? "process"] += stageActive.get(sid) ?? 0;
+      const kind = stageKind.get(sid) ?? "process";
+      snap.stages[kind] += stageActive.get(sid) ?? 0;
+      if (s && kind !== "hired") own.push({ name: attrStr(s, "name") ?? "Unnamed step", n: stageActive.get(sid) ?? 0, order: num(attr(s, "row-order")) });
     }
+    snap.steps = own.sort((a, b) => a.order - b.order).map(({ name, n }) => ({ name, n }));
     jobs.set(j.id, snap);
   }
 
@@ -415,7 +430,7 @@ async function walk(): Promise<Snapshot> {
   }
 
   return {
-    v: 1,
+    v: 2,
     syncedAt: new Date().toISOString(),
     from,
     company,
@@ -509,23 +524,42 @@ function build(snap: Snapshot, month: string, scope: RecruitmentScope): Recruitm
   const trend: RecruitmentFigures["trend"] = [];
   for (let m = snap.from; m <= monthNow(); m = monthShift(m, 1)) trend.push({ month: m, applied: sum(m, (c) => c.applied), hired: sum(m, (c) => c.hired) });
 
-  const vacancies = jobs
-    .map((j) => {
-      const c = j.months[month];
-      return {
-        id: j.id,
-        title: j.title,
-        where: [j.department, j.locations[0]].filter(Boolean).join(" · ") || null,
-        status: j.status,
-        live: j.live,
-        openings: j.openings,
-        applied: c?.applied ?? 0,
-        inProcess: j.stages.inbox + j.stages.screening + j.stages.interview + j.stages.offer + j.stages.process,
-        hired: c?.hired ?? 0,
-      };
-    })
-    .filter((v) => v.live || v.applied || v.hired)
-    .sort((a, b) => Number(b.live) - Number(a.live) || b.applied - a.applied || a.title.localeCompare(b.title));
+  /* The funnel, by the steps the account itself uses. Steps are matched by name
+     across vacancies and kept in the order the most vacancies use. */
+  const stepTotal = new Map<string, { n: number; order: number; seen: number }>();
+  for (const j of live) {
+    j.steps.forEach((st, i) => {
+      const t = stepTotal.get(st.name) ?? { n: 0, order: 0, seen: 0 };
+      t.n += st.n;
+      t.order += i;
+      t.seen++;
+      stepTotal.set(st.name, t);
+    });
+  }
+  const funnel = [...stepTotal.entries()]
+    .map(([name, t]) => ({ name, n: t.n, at: t.order / t.seen }))
+    .sort((a, b) => a.at - b.at || a.name.localeCompare(b.name))
+    .map(({ name, n }) => ({ name, n }));
+  const waiting = (j: JobSnap) => j.stages.inbox + j.stages.screening + j.stages.interview + j.stages.offer + j.stages.process;
+  const onClosedVacancies = jobs.filter((j) => !j.live).reduce((t, j) => t + waiting(j), 0);
+  const offersUsed = snap.jobs.some((j) => Object.values(j.months).some((c) => c.offersSent || c.offersAccepted || c.offersDeclined)) || Object.values(snap.unplaced).some((c) => c.offersSent);
+
+  const roles = new Map<string, RecruitmentFigures["vacancies"][number]>();
+  for (const j of jobs) {
+    const c = j.months[month];
+    if (!j.live && !c?.applied && !c?.hired) continue;
+    const r = roles.get(j.title) ?? { title: j.title, adverts: 0, liveAdverts: 0, openings: null, applied: 0, inProcess: 0, hired: 0 };
+    r.adverts++;
+    if (j.live) {
+      r.liveAdverts++;
+      r.inProcess += waiting(j);
+      if (j.openings != null) r.openings = (r.openings ?? 0) + j.openings;
+    }
+    r.applied += c?.applied ?? 0;
+    r.hired += c?.hired ?? 0;
+    roles.set(j.title, r);
+  }
+  const vacancies = [...roles.values()].sort((a, b) => b.liveAdverts - a.liveAdverts || b.applied - a.applied || a.title.localeCompare(b.title));
 
   return {
     month,
@@ -536,7 +570,7 @@ function build(snap: Snapshot, month: string, scope: RecruitmentScope): Recruitm
     groups: {
       divisions: tally(snap.jobs.map((j) => ({ name: j.division, live: j.live }))),
       departments: tally(snap.jobs.map((j) => ({ name: j.department, live: j.live }))),
-      locations: tally(snap.jobs.flatMap((j) => j.locations.map((name) => ({ name, live: j.live })))),
+      locations: tally(snap.jobs.flatMap((j) => j.locations.map((name) => ({ name, live: j.live })))).slice(0, 40),
     },
     tiles: {
       openVacancies: live.length,
@@ -558,6 +592,9 @@ function build(snap: Snapshot, month: string, scope: RecruitmentScope): Recruitm
     /* People still being considered. A hire has left the pipeline, and Teamtailor's Hired
        stage counts every hire the vacancy ever made, which is no month's figure. */
     pipeline: STAGE_KINDS.filter((k) => k !== "hired" && (k !== "process" || pipeline.process > 0)).map((kind) => ({ kind, n: pipeline[kind] })),
+    funnel,
+    onClosedVacancies,
+    offersUsed,
     sources: Object.entries(sources).map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name)),
     reasons: Object.entries(reasons).map(([reason, n]) => ({ reason, n, by: snap.reasonBy[reason] ?? null })).sort((a, b) => b.n - a.n || a.reason.localeCompare(b.reason)),
     trend,

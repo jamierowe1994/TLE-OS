@@ -37,16 +37,6 @@ const STAGE_WORDS: Record<StageKind, string> = {
   process: "In Process",
 };
 
-const STATUS_WORDS: Record<string, string> = {
-  published: "Live",
-  unlisted: "Live, Link Only",
-  completed: "Filled",
-  archived: "Archived",
-  expired: "Advert ended",
-  draft: "Draft",
-  scheduled: "Scheduled",
-};
-
 type Api = { ok: boolean; error?: string; month?: string } & Partial<RecruitmentResult> & { figures?: RecruitmentFigures; refreshing?: boolean; lastGoodAt?: string | null };
 
 function Tile({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -188,16 +178,19 @@ export default function RecruitmentTab({ month }: { month: string; seed?: SeedDa
   if (!f) return <Busy>Reading {monthLabel(month)}&rsquo;s recruitment figures.</Busy>;
   const t = f.tiles;
   const tooOld = month < f.from;
-  const pipeMax = Math.max(1, ...f.pipeline.map((p) => p.n));
+  const steps = f.funnel.length && f.funnel.length <= 14 ? f.funnel : f.pipeline.map((p) => ({ name: STAGE_WORDS[p.kind], n: p.n }));
+  const pipeMax = Math.max(1, ...steps.map((p) => p.n));
   const srcMax = Math.max(1, ...f.sources.map((s) => s.n));
   const whyMax = Math.max(1, ...f.reasons.map((r) => r.n));
   const trendMax = Math.max(1, ...f.trend.map((m) => m.applied));
-  const manyParts = f.groups.divisions.length + f.groups.departments.length + f.groups.locations.length > 1;
+  const manyParts = f.groups.divisions.length + f.groups.departments.length > 1;
   const scopeWords = f.scope.kind === "all" ? "the whole Teamtailor account" : f.scope.name;
   const live = isLiveMonth(month);
   const prev = previousMonth(month);
   const period = live ? `${monthName(month)} so far` : `In ${monthName(month)}`;
   const inPipeline = f.pipeline.reduce((a, p) => a + p.n, 0);
+  const anyOpenings = f.vacancies.some((v) => v.openings != null);
+  const roles = new Set(f.vacancies.filter((v) => v.liveAdverts).map((v) => v.title)).size;
 
   return (
     <div className="space-y-6">
@@ -216,6 +209,7 @@ export default function RecruitmentTab({ month }: { month: string; seed?: SeedDa
             )}
           </p>
         </div>
+        {f.scope.kind !== "all" || f.groups.divisions.length + f.groups.departments.length + f.groups.locations.length > 1 ? (
         <label className="block text-[11px] text-muted">
           Show figures for
           <select
@@ -248,6 +242,7 @@ export default function RecruitmentTab({ month }: { month: string; seed?: SeedDa
             )}
           </select>
         </label>
+        ) : null}
       </section>
 
       {failed ? (
@@ -269,26 +264,31 @@ export default function RecruitmentTab({ month }: { month: string; seed?: SeedDa
       {/* ------------------------------ headline ------------------------------ */}
       {tooOld ? null : (
         <p className="max-w-[78ch] text-[15px] leading-relaxed text-ink">
-          {plural(t.hired, "hire", "hires")} {live ? "so far in" : "in"} {monthLabel(month)} from {plural(t.applied, "application", "applications")}, {against(t.hired, t.hiredPrev, prev)}
-          {live ? " with the month still running" : ""}. {plural(inPipeline, "person is", "people are")} still being considered across {plural(t.openVacancies, "live vacancy", "live vacancies")}.
+          {plural(t.hired, "hire", "hires")} {live ? "so far in" : "in"} {monthLabel(month)} ({against(t.hired, t.hiredPrev, prev)}
+          {live ? ", with the month still running" : ""}) from {plural(t.applied, "application", "applications")}. {plural(inPipeline, "person is", "people are")} still being considered across{" "}
+          {plural(t.openVacancies, "live advert", "live adverts")}.
         </p>
       )}
       <section className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <Tile
-          label="Open vacancies"
+          label="Live adverts"
           value={n(t.openVacancies)}
-          sub={t.openings != null ? `Live now · ${plural(t.openings, "person", "people")} needed` : "Live in Teamtailor now"}
+          sub={`Live in Teamtailor now${roles ? ` · ${plural(roles, "role", "roles")}` : ""}${t.openings != null ? ` · ${plural(t.openings, "person", "people")} needed` : ""}`}
         />
         <Tile
           label="Applications"
           value={tooOld ? "-" : n(t.applied)}
           sub={tooOld ? undefined : `${period} · ${against(t.applied, t.appliedPrev, prev)}${t.sourced ? ` · ${n(t.sourced)} added by a recruiter` : ""}`}
         />
-        <Tile
-          label="Offers sent"
-          value={tooOld ? "-" : n(t.offersSent)}
-          sub={tooOld ? undefined : `${period} · answers in the month: ${n(t.offersAccepted)} accepted, ${n(t.offersDeclined)} declined`}
-        />
+        {f.offersUsed ? (
+          <Tile
+            label="Offers sent"
+            value={tooOld ? "-" : n(t.offersSent)}
+            sub={tooOld ? undefined : `${period} · answers in the month: ${n(t.offersAccepted)} accepted, ${n(t.offersDeclined)} declined`}
+          />
+        ) : (
+          <Tile label="In the pipeline" value={n(inPipeline)} sub="Still being considered on live adverts · as of the last read" />
+        )}
         <Tile label="Hires" value={tooOld ? "-" : n(t.hired)} sub={tooOld ? undefined : `${period} · ${against(t.hired, t.hiredPrev, prev)}`} />
         <Tile
           label="Time to hire"
@@ -311,12 +311,17 @@ export default function RecruitmentTab({ month }: { month: string; seed?: SeedDa
         <div className="card p-5">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3">
             <h3 className="text-[15px] text-ink">In the Pipeline Now</h3>
-            <span className="text-[11px] text-muted">People still being considered · live vacancies · as of the last read</span>
+            <span className="text-[11px] text-muted">People still being considered · live adverts · as of the last read</span>
           </div>
           <div className="mt-3">
-            {f.pipeline.map((p) => (
-              <Bar key={p.kind} label={STAGE_WORDS[p.kind]} value={p.n} max={pipeMax} />
+            {steps.map((p) => (
+              <Bar key={p.name} label={p.name} value={p.n} max={pipeMax} />
             ))}
+            {f.onClosedVacancies ? (
+              <p className="pt-2 text-[11px] text-muted">
+                {plural(f.onClosedVacancies, "more person is", "more people are")} still marked as in progress on adverts that are no longer live.
+              </p>
+            ) : null}
           </div>
         </div>
         <div className="card p-5">
@@ -385,17 +390,17 @@ export default function RecruitmentTab({ month }: { month: string; seed?: SeedDa
       {/* ------------------------------ vacancies ------------------------------ */}
       <section className="space-y-3">
         <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-x-3">
-          <h2 className="text-[15px] text-ink">Vacancies</h2>
-          <span className="text-[11px] text-muted">Live vacancies, and any with applications or a hire in {monthLabel(month)}</span>
+          <h2 className="text-[15px] text-ink">By Role</h2>
+          <span className="text-[11px] text-muted">Adverts with the same title are counted as one role · applied and hired are for {monthLabel(month)}</span>
         </div>
         <div className="card overflow-x-auto">
           {f.vacancies.length ? (
-            <table className="w-full text-[12.5px] sm:min-w-[600px]">
+            <table className="w-full text-[12.5px] sm:min-w-[560px]">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
-                  <th className="px-4 py-3 font-semibold">Vacancy</th>
-                  <th className="hidden px-3 py-3 font-semibold sm:table-cell">Status</th>
-                  <th className="hidden px-3 py-3 text-right font-semibold sm:table-cell">People needed</th>
+                  <th className="px-4 py-3 font-semibold">Role</th>
+                  <th className="hidden px-3 py-3 text-right font-semibold sm:table-cell">Live adverts</th>
+                  {anyOpenings ? <th className="hidden px-3 py-3 text-right font-semibold sm:table-cell">People needed</th> : null}
                   <th className="px-3 py-3 text-right font-semibold">Applied</th>
                   <th className="hidden px-3 py-3 text-right font-semibold sm:table-cell">In the pipeline</th>
                   <th className="px-4 py-3 text-right font-semibold">Hired</th>
@@ -403,29 +408,24 @@ export default function RecruitmentTab({ month }: { month: string; seed?: SeedDa
               </thead>
               <tbody>
                 {f.vacancies.map((v) => (
-                  <tr key={v.id} className="border-t border-line">
+                  <tr key={v.title} className="border-t border-line">
                     <td className="px-4 py-2.5">
                       <div className="text-ink">{v.title}</div>
-                      <div className="text-[11px] text-muted">
-                        {v.where ?? "No department set"}
-                        <span className="sm:hidden">
-                          {" "}
-                          · {STATUS_WORDS[v.status] ?? v.status}
-                          {v.openings == null ? "" : ` · ${n(v.openings)} needed`} · {n(v.inProcess)} in the pipeline
-                        </span>
+                      <div className="text-[11px] text-muted sm:hidden">
+                        {v.liveAdverts ? plural(v.liveAdverts, "live advert", "live adverts") : "No live advert"} · {n(v.inProcess)} in the pipeline
                       </div>
                     </td>
-                    <td className="hidden px-3 py-2.5 text-muted sm:table-cell">{STATUS_WORDS[v.status] ?? v.status}</td>
-                    <td className="tnum hidden px-3 py-2.5 text-right sm:table-cell">{v.openings == null ? "-" : n(v.openings)}</td>
-                    <td className="tnum px-3 py-2.5 text-right">{n(v.applied)}</td>
+                    <td className="tnum hidden px-3 py-2.5 text-right sm:table-cell">{v.liveAdverts ? n(v.liveAdverts) : "None"}</td>
+                    {anyOpenings ? <td className="tnum hidden px-3 py-2.5 text-right sm:table-cell">{v.openings == null ? "-" : n(v.openings)}</td> : null}
+                    <td className="tnum px-3 py-2.5 text-right">{tooOld ? "-" : n(v.applied)}</td>
                     <td className="tnum hidden px-3 py-2.5 text-right sm:table-cell">{n(v.inProcess)}</td>
-                    <td className="tnum px-4 py-2.5 text-right font-semibold text-ink">{n(v.hired)}</td>
+                    <td className="tnum px-4 py-2.5 text-right font-semibold text-ink">{tooOld ? "-" : n(v.hired)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           ) : (
-            <p className="px-4 py-4 text-[12.5px] text-muted">No vacancies in {scopeWords}.</p>
+            <p className="px-4 py-4 text-[12.5px] text-muted">No live adverts in {scopeWords}, and no applications in {monthLabel(month)}.</p>
           )}
         </div>
         {f.unplacedApplied ? (
