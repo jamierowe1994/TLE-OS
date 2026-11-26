@@ -85,11 +85,11 @@ function Diff({ before, after, inline }: { before: string; after: string; inline
         p.k === "same" ? (
           <span key={i}>{p.t}</span>
         ) : p.k === "out" ? (
-          <del key={i} className="bg-red-50 text-red-800 decoration-red-400">
+          <del key={i} className="bg-red-100 text-red-800 decoration-red-500">
             {p.t}
           </del>
         ) : (
-          <ins key={i} className="bg-emerald-50 text-emerald-900 no-underline" style={{ boxShadow: "inset 0 -2px 0 rgb(52 211 153)" }}>
+          <ins key={i} className="bg-emerald-100 text-emerald-950 no-underline">
             {p.t}
           </ins>
         )
@@ -110,7 +110,7 @@ function Words({ b }: { b: EBlock }) {
       </ul>
     );
   }
-  if (b.kind === "h") return <h4 className="pt-1 text-[13.5px] font-semibold text-ink" dangerouslySetInnerHTML={{ __html: clean(b.text) }} />;
+  if (b.kind === "h") return <h4 className="pt-4 text-[13.5px] font-semibold text-ink" dangerouslySetInnerHTML={{ __html: clean(b.text) }} />;
   if (b.kind === "p" || b.kind === "waiver") return <p className="text-[13.5px] leading-relaxed text-ink" dangerouslySetInnerHTML={{ __html: clean(b.text) }} />;
   return null;
 }
@@ -123,10 +123,10 @@ function Check({ change, ticked, busy, onTick, onBack }: { change: Change; ticke
         aria-pressed={ticked}
         disabled={busy}
         onClick={() => onTick(!ticked)}
-        className={`btn-press inline-flex h-8 items-center gap-2 border px-2.5 text-[12.5px] font-medium transition disabled:opacity-40 ${ticked ? "border-emerald-600 bg-emerald-600 text-white" : "border-ink bg-white text-ink hover:bg-ink hover:text-white"}`}
+        className={`btn-press inline-flex h-8 items-center gap-2 border px-2.5 text-[12.5px] font-medium transition disabled:opacity-40 ${ticked ? "border-emerald-700 bg-emerald-700 text-white" : "border-ink bg-white text-ink"}`}
       >
-        <span className={`flex h-4 w-4 items-center justify-center border ${ticked ? "border-white" : "border-current"}`}>{ticked ? <Icon d={I.tick} size={12} /> : null}</span>
-        {ticked ? "Happy with this" : "Tick if you are happy with this"}
+        <span className={`flex h-4 w-4 items-center justify-center border ${ticked ? "border-white bg-white text-emerald-700" : "border-ink bg-white"}`}>{ticked ? <Icon d={I.tick} size={12} /> : null}</span>
+        {ticked ? "Ticked" : "Tick if Happy"}
       </button>
       <button type="button" className={LINK} disabled={busy} onClick={onBack}>
         Put it back as it was
@@ -134,6 +134,18 @@ function Check({ change, ticked, busy, onTick, onBack }: { change: Change; ticke
       <span className="sr-only">{change.kind}</span>
     </div>
   );
+}
+
+/** What a locked part is, in words: the landlord boxes say which boxes. */
+function lockedSays(b: EBlock): string {
+  if (b.kind === "landlords") {
+    const f = b.fields as string[];
+    if (f.includes("bankAccountName") || f.includes("accountNumber")) return "The landlord's bank details";
+    if (f.includes("noGas") || f.includes("nonUk") || f.includes("licensing")) return "The landlord's declarations";
+    if (f.includes("registrationNumber") || f.includes("rentalPropertyNumber")) return "The landlord's registration numbers";
+    return "Each landlord's name and contact details";
+  }
+  return LOCKED_SAYS[b.kind] ?? "A fixed part of the contract";
 }
 
 /* ------------------------------- the screen ------------------------------- */
@@ -152,6 +164,8 @@ export default function ContractsTab(_: { month: string; seed?: SeedData | null 
   const [who, setWho] = useState("");
   /* On a phone there is no hover: the clause last tapped is the one that offers to be changed. */
   const [active, setActive] = useState<string | null>(null);
+  /* A phone shows one at a time: the contract, or the assistant. A wide screen shows both. */
+  const [pane, setPane] = useState<"contract" | "assistant">("contract");
   const chatEnd = useRef<HTMLDivElement | null>(null);
 
   const take = useCallback((j: Api | null, status: number) => {
@@ -286,11 +300,21 @@ export default function ContractsTab(_: { month: string; seed?: SeedData | null 
     const first = waiting[0];
     if (!first) return;
     const id = "blockId" in first ? first.blockId : first.sectionId;
-    document.getElementById(`ct-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setPane("contract");
+    setTimeout(() => document.getElementById(`ct-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
   };
+  const stands = state.stale
+    ? "Your working copy is out of date"
+    : !state.changes.length
+      ? "No changes yet"
+      : waiting.length
+        ? `${plural(waiting.length, "change", "changes")} left to tick, of ${state.changes.length}`
+        : `${state.changes.length === 1 ? "The change is" : `All ${state.changes.length} changes are`} ticked - ready to save`;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-24">
+      {/* The month, refresh and Present tools belong to the figures tabs; a contract has no month. */}
+      <style>{`.nl-fx-mast-tools { display: none !important; }`}</style>
       {/* ------------------------------ which contract, and where it stands ------------------------------ */}
       <section className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
@@ -310,13 +334,26 @@ export default function ContractsTab(_: { month: string; seed?: SeedData | null 
             ))}
           </div>
           <p className="mt-2 text-[11px] text-muted">
-            {state.title} · {state.subtitle} · {state.editionLabel}. This is the wording agents send for {place} today. Ask the assistant for a change, or click a clause to change it yourself.
+            {state.title} · {state.subtitle} · {state.editionLabel}. This is the wording agents send for {place} today. Ask the assistant for a change, or pick a clause to change it yourself.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-[12.5px] text-muted" aria-live="polite">
-            {state.changes.length ? `${plural(state.changes.length, "change", "changes")} · ${state.changes.length - waiting.length} ticked` : "No changes yet"}
+      </section>
+
+      {/* Stays in view while she reads: where it stands, and the way to save. */}
+      <div className="sticky top-0 z-20 -mx-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line bg-white px-2 py-2.5">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div role="radiogroup" aria-label="Show" className="inline-flex border border-line lg:hidden">
+            {(["contract", "assistant"] as const).map((v) => (
+              <button key={v} type="button" role="radio" aria-checked={pane === v} onClick={() => setPane(v)} className={`h-9 px-3 text-[13px] font-medium ${pane === v ? "bg-ink text-white" : "bg-white text-ink"}`}>
+                {v === "contract" ? "Contract" : "Assistant"}
+              </button>
+            ))}
+          </div>
+          <span className={`text-[13px] ${waiting.length || state.stale ? "font-semibold text-ink" : "text-muted"}`} aria-live="polite">
+            {stands}
           </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
           {waiting.length ? (
             <button type="button" className={BTN} onClick={jump}>
               Next to Check
@@ -324,14 +361,20 @@ export default function ContractsTab(_: { month: string; seed?: SeedData | null 
           ) : null}
           {state.changes.length || state.chat.length || state.stale ? (
             <button type="button" className={BTN} disabled={working} onClick={() => setConfirm({ kind: "discard" })}>
-              Discard
+              Discard All Changes
             </button>
           ) : null}
-          <button type="button" className={BTN_DARK} disabled={!canSave || working} onClick={() => setConfirm({ kind: "save" })} title={canSave ? undefined : "Every change needs your tick first"}>
+          <button type="button" className={BTN_DARK} disabled={!canSave || working} onClick={() => setConfirm({ kind: "save" })}>
             Save for Agents
           </button>
         </div>
-      </section>
+      </div>
+      {state.changes.length ? (
+        <p className="text-[12px] text-muted">
+          <ins className="bg-emerald-100 px-1 text-emerald-950 no-underline">Green</ins> is new wording. <del className="bg-red-100 px-1 text-red-800 decoration-red-500">Red, struck through</del> is wording taken out. Nothing reaches agents until every change is
+          ticked and you save.
+        </p>
+      ) : null}
 
       {state.stale ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
@@ -393,7 +436,7 @@ export default function ContractsTab(_: { month: string; seed?: SeedData | null 
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
         {/* ------------------------------ the assistant (first on a phone) ------------------------------ */}
-        <aside className="card order-first flex max-h-[70vh] flex-col lg:sticky lg:top-4 lg:order-last lg:max-h-[calc(100vh-9rem)]" aria-label="Assistant">
+        <aside className={`card max-h-[calc(100vh-13rem)] flex-col lg:sticky lg:top-16 lg:order-last lg:flex lg:max-h-[calc(100vh-19rem)] ${pane === "assistant" ? "flex" : "hidden"}`} aria-label="Assistant">
           <div className="border-b border-line px-4 py-3">
             <h3 className="text-[15px] text-ink">Assistant</h3>
             <p className="mt-0.5 text-[11px] text-muted">Say what you want changed. It drafts the wording; nothing changes until you tick it and save. It is not legal advice.</p>
@@ -421,6 +464,11 @@ export default function ContractsTab(_: { month: string; seed?: SeedData | null 
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />
                 Reading the contract and drafting.
               </div>
+            ) : null}
+            {waiting.length && busy !== "ask" ? (
+              <button type="button" className={`${BTN} w-full lg:hidden`} onClick={jump}>
+                See the {waiting.length === 1 ? "Change" : "Changes"} in the Contract
+              </button>
             ) : null}
             <div ref={chatEnd} />
           </div>
@@ -459,7 +507,7 @@ export default function ContractsTab(_: { month: string; seed?: SeedData | null 
         </aside>
 
         {/* ------------------------------ the contract ------------------------------ */}
-        <article className="card min-w-0 px-5 py-6 sm:px-8" aria-label="The contract">
+        <article className={`card min-w-0 px-5 py-6 sm:px-8 lg:block ${pane === "contract" ? "block" : "hidden"}`} aria-label="The contract">
           <header className="border-b border-line pb-4">
             <h2 className="text-[17px] text-ink">{state.title}</h2>
             <p className="mt-1 text-[12px] text-muted">
@@ -488,21 +536,21 @@ export default function ContractsTab(_: { month: string; seed?: SeedData | null 
                     if (locked) {
                       return (
                         <div key={b.id} className="flex items-center gap-2 border border-dashed border-line px-3 py-2 text-[12px] text-muted">
-                          <Icon d={I.lock} /> {LOCKED_SAYS[b.kind] ?? "A fixed part of the contract"} · locked
+                          <Icon d={I.lock} /> {lockedSays(b)} · locked, filled in for each home
                         </div>
                       );
                     }
                     return (
                       <div key={b.id} id={`ct-${b.id}`} onClick={() => setActive(b.id)} className={`group relative ${c ? `border-l-2 pl-3 ${c.kind === "removed" ? "border-red-400" : "border-emerald-500"}` : ""}`}>
                         {c ? (
-                          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{c.kind === "changed" ? "Changed" : c.kind === "added" ? "New clause" : "Removed"}</div>
+                          <div className={`mb-1 text-[12px] font-semibold uppercase tracking-wide ${c.kind === "removed" ? "text-red-800" : "text-emerald-800"}`}>{c.kind === "changed" ? "Changed" : c.kind === "added" ? "New clause" : "Taken out"}</div>
                         ) : null}
                         {open && !editing.adding ? null : c?.kind === "changed" ? (
                           <Diff before={c.before} after={c.after} />
                         ) : out || c?.kind === "removed" ? (
-                          <del className="block whitespace-pre-wrap bg-red-50 text-[13.5px] leading-relaxed text-red-800 decoration-red-400">{plain(wordsOf(b))}</del>
+                          <del className="block whitespace-pre-wrap bg-red-100 text-[13.5px] leading-relaxed text-red-800 decoration-red-500">{plain(wordsOf(b))}</del>
                         ) : c?.kind === "added" ? (
-                          <div className="bg-emerald-50 px-1">
+                          <div className="bg-emerald-100 px-1">
                             <Words b={b} />
                           </div>
                         ) : (
