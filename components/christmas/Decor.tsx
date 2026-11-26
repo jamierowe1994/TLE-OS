@@ -8,15 +8,11 @@ import { useChristmas, useStill } from "@/lib/christmas";
  * The Christmas decorations (lib/christmas, 26 Nov 2026). All drawn here in
  * code, no pictures: Steve's hat, the holly by the name, the fairy lights
  * along the sidebar, the snowy garland and the snow on the dashboard, and the tile
- * that turns the look on and off. Colours are the house palette's warm
- * neighbours: berry, pine, a dull gold and linen.
+ * that turns the look on and off. The colours that go with it (a deep pine
+ * sidebar, a cream or midnight page) are in app/new-look/christmas.css.
  */
 
 const BERRY = "#9e2f35";
-const PINE = "#2f4a3a";
-const GOLD = "#c49a4a";
-const LINEN = "#f1e8da";
-const CLAY = "#a85a51";
 
 /* ── Steve's hat ─────────────────────────────────────────────────────────── */
 
@@ -59,8 +55,9 @@ export function Holly({ className = "" }: { className?: string }) {
   const leaf = "M0 0 C 3 -3, 6 -2, 8 -5 C 9 -2, 12 -2, 14 -4 C 14 -1, 17 0, 19 -1 C 17 2, 17 4, 19 6 C 16 6, 14 7, 13 10 C 11 7, 8 7, 6 9 C 6 6, 3 4, 0 4 C 2 2, 1 1, 0 0 Z";
   return (
     <svg className={`xmas-holly ${className}`} viewBox="-2 -14 44 30" aria-hidden focusable="false">
-      <path d={leaf} transform="translate(20 0) rotate(-24)" fill={PINE} />
-      <path d={leaf} transform="translate(20 0) scale(-1 1) rotate(-24)" fill="#3c5b47" />
+      {/* Light leaves: the Christmas sidebar they sit on is deep green in both versions. */}
+      <path d={leaf} transform="translate(20 0) rotate(-24)" fill="#7fb37a" />
+      <path d={leaf} transform="translate(20 0) scale(-1 1) rotate(-24)" fill="#9cc98f" />
       <path d="M20 0 l0 0" stroke="#24382c" />
       <circle cx="17.5" cy="1.5" r="3.6" fill={BERRY} />
       <circle cx="23" cy="2.5" r="3.6" fill="#b23a40" />
@@ -75,7 +72,8 @@ export function Holly({ className = "" }: { className?: string }) {
 
 export function FairyLights() {
   const still = useStill();
-  const bulbs = [GOLD, BERRY, "#e9d9a8", PINE, GOLD, CLAY, "#e9d9a8", BERRY, GOLD, PINE, "#e9d9a8", BERRY];
+  /* Bright bulbs: they hang on a deep green sidebar. */
+  const bulbs = ["#f2c14e", "#e5484d", "#fff1c9", "#7fd08a", "#f2c14e", "#e5484d", "#fff1c9", "#7fd08a", "#f2c14e", "#e5484d", "#fff1c9", "#7fd08a"];
   const n = bulbs.length;
   /* A wire along the very top that dips twice; the bulbs hang under it. */
   const y = (x: number) => 2 + 4 * Math.sin((x / 100) * Math.PI) ** 2;
@@ -85,14 +83,14 @@ export function FairyLights() {
   }).join(" ");
   return (
     <svg className={`xmas-lights${still ? " is-still" : ""}`} viewBox="0 0 200 18" preserveAspectRatio="none" aria-hidden focusable="false">
-      <path d={wire} fill="none" stroke="#4a463d" strokeOpacity="0.5" strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
+      <path d={wire} fill="none" stroke="#f1e8da" strokeOpacity="0.45" strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
       {bulbs.map((c, i) => {
         const x = 8 + (i * 184) / (n - 1);
         const top = y(x);
         return (
           <g key={i} className="xmas-bulb" style={{ animationDelay: `${(i * 0.37) % 2.6}s` }}>
             <ellipse className="xmas-glow" cx={x} cy={top + 5.6} rx="4.2" ry="4.6" fill={c} />
-            <rect x={x - 1.1} y={top - 0.4} width="2.2" height="2" rx="0.4" fill="#4a463d" />
+            <rect x={x - 1.1} y={top - 0.4} width="2.2" height="2" rx="0.4" fill="#d9cdb8" />
             <ellipse cx={x} cy={top + 5.2} rx="1.9" ry="3" fill={c} />
             <ellipse cx={x - 0.6} cy={top + 4.2} rx="0.5" ry="0.9" fill="#fff" opacity="0.65" />
           </g>
@@ -226,11 +224,14 @@ function seeded(seed: number) {
 }
 
 /**
- * A snowy pine garland hung across the top of the dashboard (James, 26 Nov
- * 2026, from a picture of a frosted wreath: "snowy pine cones ... the little
- * red berries and little white bits ... rather than in a wreath, hanging").
- * Frosted needles along a swag, pine cones with snow on their scales, berry
- * clusters, white frosted balls and the odd red bauble. All drawn here.
+ * A pine garland hung across the top of the dashboard (James, 26 Nov 2026).
+ * First a frosted tangle after a picture of a wreath; then, from a render of
+ * a real garland: "have a look at how all of the pines flow in terms of
+ * direction ... they all follow the same direction". So every needle now
+ * grows from one stem and sweeps the same way, left to right, splayed a
+ * little above and below it like a real fir branch. It hangs in scallops
+ * from pins, with a pine cone, berries and a frosted ball at each pin, and a
+ * light dusting of snow on the upper needles ("I do like the snow").
  */
 function Garland() {
   const box = useRef<HTMLDivElement>(null);
@@ -239,86 +240,112 @@ function Garland() {
      and still clears the date line under it. */
   const k = 1.35;
   const w = px / k;
-  const swags = px > 900 ? 2 : 1;
-  const sag = 28;
-  const top = 10;
-  const H = sag + 64;
-  const span = w / Math.max(1, swags);
+  const swags = Math.max(2, Math.round(px / 300));
+  const sag = 20;
+  const top = 12;
+  const H = top + sag + 34;
+  const span = w / swags;
   const yAt = (x: number) => {
-    const t = (x % span) / span;
+    const t = ((x % span) + span) % span / span;
     return top + sag * 4 * t * (1 - t);
+  };
+  /* The way the stem is heading at x, in radians: the needles follow it. */
+  const headingAt = (x: number) => {
+    const t = ((x % span) + span) % span / span;
+    return Math.atan((sag * 4 * (1 - 2 * t)) / span);
   };
 
   const art = (() => {
     if (w <= 0) return null;
     const rnd = seeded(1225);
-    const darkNeedles: string[] = [];
-    const midNeedles: string[] = [];
+    const back: string[] = [];
+    const mid: string[] = [];
+    const front: string[] = [];
     const frost: string[] = [];
-    const cones: Array<{ x: number; y: number; r: number; tilt: number }> = [];
-    const berries: Array<{ x: number; y: number; r: number }> = [];
-    const balls: Array<{ x: number; y: number; r: number }> = [];
-    const baubles: Array<{ x: number; y: number; r: number }> = [];
-    const flecks: Array<{ x: number; y: number; r: number }> = [];
+    const dabs: Array<{ x: number; y: number; r: number }> = [];
+    const deg = Math.PI / 180;
 
-    const body: Array<{ x: number; y: number; r: number }> = [];
-    const snowTop: Array<{ x: number; y: number; r: number }> = [];
-    /* A soft dark body first, so the branch reads as full, not as sticks. */
-    for (let x = -8; x <= w + 8; x += 7) {
-      const y = yAt(Math.max(0, Math.min(w - 0.01, x)));
-      body.push({ x: x + (rnd() - 0.5) * 3, y: y + 2 + (rnd() - 0.5) * 3, r: 8 + rnd() * 3 });
-    }
-    /* Needles: dense tufts splayed round the swag, curving a little, most of them frosted at the tip. */
-    for (let x = -6; x <= w + 6; x += 2.1) {
-      const y = yAt(Math.max(0, Math.min(w - 0.01, x)));
-      for (let k = 0; k < 5; k++) {
-        const ang = (rnd() * 2 - 1) * Math.PI + Math.PI / 2;
-        const len = 7 + rnd() * 10;
-        const ox = x + (rnd() - 0.5) * 5;
-        const oy = y + 2 + (rnd() - 0.5) * 7;
-        const ex = ox + Math.cos(ang) * len;
-        const ey = oy + Math.sin(ang) * len * 0.78;
-        const bend = (rnd() - 0.5) * 4;
-        const qx = (ox + ex) / 2 + Math.sin(ang) * bend;
-        const qy = (oy + ey) / 2 - Math.cos(ang) * bend;
-        (rnd() < 0.55 ? darkNeedles : midNeedles).push(`M${ox.toFixed(1)} ${oy.toFixed(1)}Q${qx.toFixed(1)} ${qy.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}`);
-        if (rnd() < 0.72) {
-          const t0 = 0.5 + rnd() * 0.15;
-          frost.push(`M${(ox + (ex - ox) * t0).toFixed(1)} ${(oy + (ey - oy) * t0).toFixed(1)}L${ex.toFixed(1)} ${ey.toFixed(1)}`);
-        }
+    /* One needle: from the stem, forward along the heading, leaning `lean`
+       off it (negative = above the stem), bowing back towards the heading. */
+    const needle = (x: number, lean: number, len: number, into: string[], snow: boolean) => {
+      const y = yAt(x);
+      const h = headingAt(x);
+      const a = h + lean;
+      const ox = x + (rnd() - 0.5) * 1.2;
+      const oy = y + Math.sign(lean) * rnd() * 1.4;
+      const ex = ox + Math.cos(a) * len;
+      const ey = oy + Math.sin(a) * len;
+      /* The bow: the middle of the needle sits a little further out than the straight line. */
+      const mx = ox + Math.cos(a + lean * 0.35) * len * 0.5;
+      const my = oy + Math.sin(a + lean * 0.35) * len * 0.5;
+      into.push(`M${ox.toFixed(1)} ${oy.toFixed(1)}Q${mx.toFixed(1)} ${my.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}`);
+      if (snow) {
+        const fx = ox + (ex - ox) * 0.58;
+        const fy = oy + (ey - oy) * 0.58;
+        frost.push(`M${fx.toFixed(1)} ${fy.toFixed(1)}L${ex.toFixed(1)} ${ey.toFixed(1)}`);
       }
-      /* Snow lying along the top of the branch, as on the wreath. */
-      if (rnd() < 0.5) snowTop.push({ x: x + (rnd() - 0.5) * 6, y: y - 3 - rnd() * 6, r: 1.4 + rnd() * 2.2 });
-      if (rnd() < 0.28) flecks.push({ x: x + (rnd() - 0.5) * 18, y: y + (rnd() - 0.35) * 24, r: 0.6 + rnd() * 1 });
+    };
+
+    for (let x = -10; x <= w + 2; x += 1.25) {
+      /* Long dark needles underneath, splayed widest. */
+      needle(x, -(30 + rnd() * 18) * deg, 11 + rnd() * 5, back, rnd() < 0.22);
+      needle(x, (30 + rnd() * 18) * deg, 11 + rnd() * 5, back, false);
+      /* The body of the branch. */
+      needle(x + 0.6, -(20 + rnd() * 16) * deg, 9 + rnd() * 5, mid, rnd() < 0.3);
+      needle(x + 0.6, (20 + rnd() * 16) * deg, 9 + rnd() * 5, mid, false);
+      /* Short bright needles lying close along the stem, catching the light. */
+      if (rnd() < 0.7) needle(x + 0.3, (rnd() < 0.5 ? -1 : 1) * (8 + rnd() * 12) * deg, 6 + rnd() * 4, front, false);
+      /* A dab of snow lying on top here and there. */
+      if (rnd() < 0.07) {
+        const h = headingAt(x);
+        dabs.push({ x: x + Math.sin(h) * 5, y: yAt(x) - Math.cos(h) * (4 + rnd() * 3), r: 1.2 + rnd() * 1.6 });
+      }
     }
 
-    /* The trimmings, spaced along the swag so they never bunch. */
-    const along = (step: number, jitter: number, each: (x: number, y: number) => void) => {
-      for (let x = step * 0.5; x < w - 8; x += step + (rnd() - 0.5) * jitter) each(x, yAt(x));
-    };
-    along(118, 30, (x, y) => {
-      cones.push({ x: x - 8, y: y + 7 + rnd() * 3, r: 10 + rnd() * 1.5, tilt: -28 + rnd() * 16 });
-      if (rnd() < 0.7) cones.push({ x: x + 9, y: y + 10 + rnd() * 3, r: 9 + rnd() * 1.5, tilt: 14 + rnd() * 18 });
-    });
-    along(64, 18, (x, y) => {
-      const cx = x + 30;
-      const cy = y + 2 + rnd() * 8;
-      const n = 3 + Math.floor(rnd() * 3);
-      for (let i = 0; i < n; i++) berries.push({ x: cx + (rnd() - 0.5) * 11, y: cy + (rnd() - 0.5) * 9, r: 2.6 + rnd() * 1.1 });
-    });
-    along(52, 20, (x, y) => {
-      balls.push({ x: x + 14 + (rnd() - 0.5) * 8, y: y - 4 + rnd() * 16, r: 2.6 + rnd() * 2.8 });
-    });
-    along(236, 40, (x, y) => {
-      baubles.push({ x: x + 58, y: y + 8 + rnd() * 6, r: 5.5 + rnd() * 1.5 });
-    });
-
-    return { body, snowTop, darkNeedles, midNeedles, frost, cones, berries, balls, baubles, flecks };
+    /* At each pin: a cone, berries and a frosted ball, where a real garland is tied up. */
+    const pins: Array<{ x: number; y: number; side: number; r: number; berries: Array<{ x: number; y: number; r: number }>; ball: { x: number; y: number; r: number } }> = [];
+    for (let i = 0; i <= swags; i++) {
+      const x = Math.min(w - 6, Math.max(6, i * span));
+      const side = i === 0 ? 1 : i === swags ? -1 : rnd() < 0.5 ? -1 : 1;
+      const cx = x + side * 3;
+      const n = 3 + Math.floor(rnd() * 2);
+      pins.push({
+        x: cx,
+        y: top + 9,
+        side,
+        r: 8.5 + rnd() * 1.5,
+        berries: Array.from({ length: n }, (_, j) => ({ x: cx - side * (9 + (j % 2) * 4.5) + (rnd() - 0.5) * 2, y: top + 2 + j * 3.2 + (rnd() - 0.5) * 2, r: 2.5 + rnd() * 0.9 })),
+        ball: { x: cx + side * 9.5, y: top + 3 + rnd() * 4, r: 3 + rnd() * 1.2 },
+      });
+    }
+    /* And a few berries along the low point of each swag. */
+    const low: Array<{ x: number; y: number; r: number }> = [];
+    for (let i = 0; i < swags; i++) {
+      const x = (i + 0.5) * span + (rnd() - 0.5) * span * 0.2;
+      const n = 2 + Math.floor(rnd() * 2);
+      for (let j = 0; j < n; j++) low.push({ x: x + j * 4.6 + (rnd() - 0.5), y: yAt(x) + 3 + (j % 2) * 3.4, r: 2.3 + rnd() * 0.8 });
+    }
+    /* Fairy lights wound along it, lit in the dark version only (James, 26 Nov
+       2026: "when they're in dark mode, we can have some twinkling lights"). */
+    const lights: Array<{ x: number; y: number; c: string; delay: number; dur: number }> = [];
+    for (let x = 9; x < w - 4; x += 15 + rnd() * 6) {
+      const h = headingAt(x);
+      const off = (rnd() < 0.5 ? -1 : 1) * (2 + rnd() * 4);
+      const pick = rnd();
+      lights.push({
+        x: x - Math.sin(h) * off,
+        y: yAt(x) + Math.cos(h) * off,
+        c: pick < 0.68 ? "#ffd98a" : pick < 0.84 ? "#ff7b72" : "#fff3d6",
+        delay: rnd() * 3.2,
+        dur: 2 + rnd() * 2.2,
+      });
+    }
+    return { back, mid, front, frost, dabs, pins, low, lights };
   })();
 
-  /* The cord the garland hangs from, tied off at each end. */
-  const cord = w
-    ? Array.from({ length: swags }, (_, s) => `M${s * span} ${top} Q ${s * span + span / 2} ${top + sag * 2} ${(s + 1) * span} ${top}`).join(" ")
+  /* The stem itself, a brown line the needles grow from. */
+  const stem = w
+    ? Array.from({ length: swags }, (_, s) => `M${(s * span).toFixed(1)} ${top} Q ${(s * span + span / 2).toFixed(1)} ${top + sag * 2} ${((s + 1) * span).toFixed(1)} ${top}`).join(" ")
     : "";
 
   return (
@@ -341,34 +368,40 @@ function Garland() {
               <stop offset="1" stopColor="#5a3820" />
             </radialGradient>
           </defs>
-          <path d={cord} fill="none" stroke="#2c3a2e" strokeWidth="2" />
-          {art.body.map((b, i) => (
-            <circle key={`m${i}`} cx={b.x} cy={b.y} r={b.r} fill="#1d3524" />
-          ))}
-          <path d={art.darkNeedles.join("")} stroke="#24412c" strokeWidth="1.5" strokeLinecap="round" fill="none" />
-          <path d={art.midNeedles.join("")} stroke="#3d6847" strokeWidth="1.3" strokeLinecap="round" fill="none" />
-          <path d={art.frost.join("")} stroke="#ffffff" strokeOpacity="0.92" strokeWidth="1.6" strokeLinecap="round" fill="none" />
-          {art.snowTop.map((f, i) => (
+          <path d={art.back.join("")} stroke="#22472b" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+          <path d={stem} fill="none" stroke="#4d3a26" strokeWidth="1.6" strokeLinecap="round" />
+          <path d={art.mid.join("")} stroke="#3c7341" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+          <path d={art.front.join("")} stroke="#7aad57" strokeWidth="1.1" strokeLinecap="round" fill="none" />
+          <path d={art.frost.join("")} stroke="#ffffff" strokeOpacity="0.9" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+          {art.dabs.map((f, i) => (
             <circle key={`s${i}`} cx={f.x} cy={f.y} r={f.r} fill="#fbfcfd" />
           ))}
-          {art.cones.map((c, i) => <PineCone key={`c${i}`} {...c} seed={i + 7} />)}
-          {art.baubles.map((b, i) => (
-            <g key={`b${i}`}>
-              <circle cx={b.x} cy={b.y} r={b.r} fill="url(#xmasBerry)" />
-              <circle cx={b.x - b.r * 0.35} cy={b.y - b.r * 0.38} r={b.r * 0.22} fill="#fff" opacity="0.75" />
-            </g>
-          ))}
-          {art.balls.map((b, i) => (
-            <circle key={`w${i}`} cx={b.x} cy={b.y} r={b.r} fill="url(#xmasBall)" />
-          ))}
-          {art.berries.map((b, i) => (
-            <g key={`r${i}`}>
+          <g className="xmas-glights">
+            {art.lights.map((l, i) => (
+              <g key={i} className="xmas-glight" style={{ animationDelay: `${l.delay.toFixed(2)}s`, animationDuration: `${l.dur.toFixed(2)}s` }}>
+                <circle className="xmas-glight-halo" cx={l.x} cy={l.y} r="5.5" fill={l.c} />
+                <circle cx={l.x} cy={l.y} r="1.7" fill={l.c} />
+                <circle cx={l.x} cy={l.y} r="0.8" fill="#fffdf4" />
+              </g>
+            ))}
+          </g>
+          {art.low.map((b, i) => (
+            <g key={`l${i}`}>
               <circle cx={b.x} cy={b.y} r={b.r} fill="url(#xmasBerry)" />
               <circle cx={b.x - b.r * 0.3} cy={b.y - b.r * 0.35} r={b.r * 0.28} fill="#fff" opacity="0.7" />
             </g>
           ))}
-          {art.flecks.map((f, i) => (
-            <circle key={`f${i}`} cx={f.x} cy={f.y} r={f.r} fill="#fff" opacity="0.95" />
+          {art.pins.map((p, i) => (
+            <g key={`p${i}`}>
+              <PineCone x={p.x} y={p.y} r={p.r} tilt={p.side * 12} seed={i + 7} />
+              <circle cx={p.ball.x} cy={p.ball.y} r={p.ball.r} fill="url(#xmasBall)" />
+              {p.berries.map((b, j) => (
+                <g key={j}>
+                  <circle cx={b.x} cy={b.y} r={b.r} fill="url(#xmasBerry)" />
+                  <circle cx={b.x - b.r * 0.3} cy={b.y - b.r * 0.35} r={b.r * 0.28} fill="#fff" opacity="0.7" />
+                </g>
+              ))}
+            </g>
           ))}
         </svg>
       )}
@@ -434,8 +467,8 @@ function Snow() {
         ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
         /* On a white page a white flake vanishes: a soft grey-blue edge keeps it visible without looking dirty. */
         ctx.fillStyle = `rgba(255,255,255,${f.o})`;
-        ctx.shadowColor = isDark ? "rgba(255,255,255,0.35)" : "rgba(78,98,120,0.7)";
-        ctx.shadowBlur = isDark ? 4 : 2.5;
+        ctx.shadowColor = isDark ? "rgba(255,255,255,0.35)" : "rgba(96,78,52,0.6)";
+        ctx.shadowBlur = isDark ? 4 : 3;
         ctx.fill();
       }
       raf = requestAnimationFrame(tick);
