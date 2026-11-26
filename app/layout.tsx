@@ -11,6 +11,7 @@ import "./terms-send.css";
 import "./rent-review.css";
 import "./terms-sign.css";
 import "./terms-questions.css";
+import "./terms-edge.css";
 import "./tenant-passport.css";
 import "./presentation-builder.css";
 

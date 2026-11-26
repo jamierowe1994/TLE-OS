@@ -23,6 +23,7 @@ export default function QuestionField({
   onChange,
   locked = null,
   by = null,
+  extra = null,
 }: {
   q: Question;
   answers: Answers;
@@ -31,6 +32,8 @@ export default function QuestionField({
   locked?: string | null;
   /** Who gave the answer already there, said under it ("From your agent"). */
   by?: string | null;
+  /** Drawn under the answer: the offer to upload a certificate they say they hold. */
+  extra?: React.ReactNode;
 }) {
   if (!asked(q, answers)) return null;
   const raw = answers[q.id];
@@ -108,6 +111,8 @@ export default function QuestionField({
           </div>
         </div>
       ) : null}
+
+      {!locked && extra ? extra : null}
 
       {by && !locked ? <p className="tq-by">{by}</p> : null}
     </div>

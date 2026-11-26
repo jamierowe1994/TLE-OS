@@ -5,6 +5,8 @@ import { sendAsAgent } from "@/lib/send-as-agent";
 import { findUserById, type OsUser } from "@/lib/users";
 import { fetchSigned, pushToRex, store } from "@/lib/signed-documents";
 import { addFileDoc } from "@/lib/file-documents";
+import { isDocKind, landlordAccountByEmail, upsertLandlordAccount } from "@/lib/landlord-account";
+import { storeLandlordPages } from "@/lib/landlord-upload";
 import { putInstructionInRex } from "@/lib/rex-instruct";
 import { isTestFile } from "@/lib/test-guard";
 import { q } from "@/lib/db";
@@ -497,6 +499,8 @@ export async function landlordView(token: string) {
     pulled: forForm(again.answers),
     /* What the file shows for a declaration, said beside the question; never ticked for them. */
     hints: again.hints,
+    /* Certificates they have already uploaded from this link, by kind (26 Nov 2026). */
+    uploads: asks ? await uploadsFor(terms, party.email).catch(() => ({} as Record<string, string>)) : {},
     people: terms.parties.map((p) => ({ key: p.key, name: p.name, signed: Boolean(p.signedAt), you: p.token === token })),
     preview: inPreview(),
   };
@@ -594,6 +598,49 @@ export async function saveAnswersByToken(token: string, raw: unknown, checked: s
     await saveParties(fresh.id, fresh.parties.map((p, k) => (k === 0 ? { ...p, details } : p)));
   }
   return { answers: forForm(saved.answers), answeredBy: whoSaid(saved.who, terms.agentEmail) };
+}
+
+/* ── A certificate they already hold, uploaded while they answer (James, 26 Nov 2026: "if they're
+   there and they've got it there, then we should just give them an easy option to upload it") ──
+   It goes in by the same door as an upload from their portal (lib/landlord-upload), so the
+   compliance desk checks it before it becomes a certificate: nothing is written to REX here, and
+   nobody is emailed. Terms sent from a listing have no appraisal, so the home and its agent are
+   kept on the row for the desk to read. Optional: nothing in signing waits on it. */
+const UPLOAD_KINDS = ["gas", "eicr", "epc"];
+
+async function uploadsFor(terms: TermsRow, email: string): Promise<Record<string, string>> {
+  const account = await landlordAccountByEmail(email);
+  if (!account) return {};
+  const rows = await q<{ kind: string; name: string }>(
+    `SELECT DISTINCT ON (kind) kind, name FROM os_landlord_documents
+      WHERE account_id = $1 AND kind = ANY($2::text[])
+        AND (($3::text IS NOT NULL AND appraisal_id = $3) OR address = $4)
+      ORDER BY kind, uploaded_at DESC`,
+    [account.id, UPLOAD_KINDS, terms.appraisalId ?? null, terms.propertyAddress]
+  );
+  return Object.fromEntries(rows.map((r) => [r.kind, r.name]));
+}
+
+export async function uploadByToken(token: string, kindRaw: string, files: File[], label?: string): Promise<{ kind: string; name: string }> {
+  const hit = await byToken(token);
+  if (!hit) throw new TermsRefused("This link isn't recognised.");
+  const { terms, party } = hit;
+  if (terms.status === "cancelled") throw new TermsRefused("These terms were withdrawn. Your agent will send new ones.");
+  if (!UPLOAD_KINDS.includes(kindRaw) || !isDocKind(kindRaw)) throw new TermsRefused("That isn't a certificate we can take here.");
+  if (!files.length) throw new TermsRefused("No file was attached.");
+  if (files.length > 6) throw new TermsRefused("That is too many pages at once. Send up to six.");
+  const account =
+    (await landlordAccountByEmail(party.email)) ??
+    (await upsertLandlordAccount({ email: party.email.trim().toLowerCase(), name: party.name, contactIds: [], properties: [], appraisals: [] }));
+  const out = await storeLandlordPages({ accountId: account.id, appraisalId: terms.appraisalId ?? null, kind: kindRaw, files, label, via: "sign" });
+  if (!out.ok) throw new TermsRefused(out.error);
+  await q(`UPDATE os_landlord_documents SET property_id = $2, address = $3, agent = $4 WHERE id = $1`, [
+    out.document.id,
+    terms.propertyId ?? null,
+    terms.propertyAddress,
+    terms.agentName,
+  ]).catch(() => null);
+  return { kind: kindRaw, name: out.document.name };
 }
 
 /** What a landlord still has to answer before they can sign: the screens of questions, and their own details. */

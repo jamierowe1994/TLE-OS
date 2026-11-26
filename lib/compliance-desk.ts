@@ -166,7 +166,7 @@ export async function verifyQueue(): Promise<VerifyItem[]> {
       [CHECKS_BEGAN]
     ),
     q<Record<string, unknown>>(
-      `SELECT d.id, d.kind AS type_raw, d.kind, d.name, d.r2_key, d.uploaded_at, a.name AS landlord, m.address, m.postcode, m.agent,
+      `SELECT d.id, d.kind AS type_raw, d.kind, d.name, d.r2_key, d.uploaded_at, a.name AS landlord, COALESCE(m.address, d.address) AS address, m.postcode, COALESCE(m.agent, d.agent) AS agent,
               k.state, k.note, k.by_name, k.at AS checked_at, k.told, k.told_at, tu.name AS told_name
          FROM os_landlord_documents d
          JOIN os_portal_accounts a ON a.id = d.account_id
@@ -346,7 +346,7 @@ const LANDLORD_CERT_TYPES: Record<string, { id: string; label: string }[]> = {
  */
 async function fileLandlordCertificate(p: { id: string; type: string; expiry: string; issue?: string | null; by: string }): Promise<string> {
   const rows = await q<Record<string, unknown>>(
-    `SELECT d.id, d.kind, d.name, d.r2_key, d.content_type, d.certificate_id, a.name AS landlord, m.address, m.postcode, m.rex_property_id
+    `SELECT d.id, d.kind, d.name, d.r2_key, d.content_type, d.certificate_id, a.name AS landlord, COALESCE(m.address, d.address) AS address, m.postcode, COALESCE(m.rex_property_id, d.property_id) AS rex_property_id
        FROM os_landlord_documents d
        JOIN os_portal_accounts a ON a.id = d.account_id
        LEFT JOIN os_market_appraisals m ON m.id = d.appraisal_id
@@ -431,7 +431,7 @@ async function agentFor(kind: "certificate" | "landlord_document", id: string): 
     };
   }
   const rows = await q<Record<string, unknown>>(
-    `SELECT d.kind, d.name, d.appraisal_id, m.address, m.postcode, m.agent
+    `SELECT d.kind, d.name, d.appraisal_id, COALESCE(m.address, d.address) AS address, m.postcode, COALESCE(m.agent, d.agent) AS agent
        FROM os_landlord_documents d LEFT JOIN os_market_appraisals m ON m.id = d.appraisal_id WHERE d.id = $1`,
     [id]
   );

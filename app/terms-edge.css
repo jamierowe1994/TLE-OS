@@ -1,0 +1,253 @@
+/* ===========================================================================
+   THE CONTRACT SCREENS IN THE HOUSE STYLE (James, 26 Nov 2026: "still running
+   on the old colours ... orange buttons"). The agent's Send the Terms screen
+   (.tsa.tsa-edge, behind the switch "termslook") and the landlord's Sign Your
+   Terms page (.tsl.tsl-edge, which has no sign-in, so it is for everyone),
+   with the contract paper (.tsp) and the questions (.tq) inside each.
+
+   The final palette (brown buttons, terracotta for highlights, linen washes,
+   olive for done, no orange), square corners, titles and buttons in
+   Bricolage's condensed capitals, Inter for reading, fine lines, no shadows.
+   The paper keeps its own layout and wording: only its colours move.
+
+   Loaded after the four terms stylesheets; the rules they hold are untouched,
+   so with the switch off the agent's screen is exactly as it was.
+=========================================================================== */
+
+/* ---- the palette ---- */
+.tsa.tsa-edge, .tsl.tsl-edge, .tsa-edge .tsp, .tsl-edge .tsp {
+  --grey: #f8f7f4; --well: #efece6;
+  --coral: #a85a51; --coral-soft: #f5efe6; --clay: #a85a51;
+  --sage: #56634a; --sage-soft: #f1f4ec; --manilla: #f5efe6; --oat: #e8dfd2;
+  --brown: #56423e; --brown-dark: #43332f; --wash: #f8f7f4;
+  --line: rgba(20, 20, 19, .11); --line-2: rgba(20, 20, 19, .22);
+  --f-cond: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ---- square, as the website is ---- */
+:is(.tsa.tsa-edge, .tsl.tsl-edge) *:not([class*="spin"], input[type="checkbox"], input[type="radio"], .ticks i, .done-tick, .done-tick *, .stamp, .sw) { border-radius: 0; }
+
+/* ---- titles in the condensed capitals ---- */
+:is(.tsa.tsa-edge, .tsl.tsl-edge) :is(.p-head h2, .rail h3, .sheet h3, .fly h3, .seal h3, .done h1, .bys-head h2, .bys-intro h1) {
+  font-family: var(--f-cond); font-stretch: 75%; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; line-height: 1;
+}
+.tsa.tsa-edge .p-head h2 { font-size: 40px; margin: 16px 0 10px; }
+.tsa.tsa-edge .p-head h2 span { display: block; color: var(--coral); }
+.tsa.tsa-edge .fly h3, .tsl.tsl-edge .seal h3, .tsl.tsl-edge .done h1 { font-size: 40px; }
+.tsl.tsl-edge .rail h3 { font-size: 30px; margin-bottom: 8px; }
+.tsl.tsl-edge .sheet h3 { font-size: 30px; margin-bottom: 6px; }
+.tsl.tsl-edge .bys-head h2 { font-size: 32px; }
+.tsl.tsl-edge .bys-intro h1 { font-size: 40px; }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) :is(.fly h3, .seal h3, .done h1, .rail h3, .bys-intro h1) span { color: var(--coral); }
+
+/* ---- buttons: brown, capitals ---- */
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .btn {
+  font-family: var(--f-cond); font-stretch: 75%; font-weight: 600; text-transform: uppercase; letter-spacing: .09em; font-size: 13px;
+  border-color: var(--line-2); transition: background .2s, border-color .2s, color .2s, opacity .2s;
+}
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .btn.primary { background: var(--brown); border-color: var(--brown); color: #fff; }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .btn.primary:hover { background: var(--brown-dark); border-color: var(--brown-dark); color: #fff; gap: 8px; }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .btn:not(.primary):not(.link):not(.ghost):hover { background: var(--coral-soft); border-color: var(--brown); color: var(--ink); }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .btn.link { font-family: var(--f-ui); font-stretch: 100%; font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 14px; }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .btn.ghost { color: var(--ink); }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .btn.ghost:hover { background: var(--coral-soft); color: var(--ink); }
+.tsa.tsa-edge .btn.sm { font-size: 11.5px; }
+.tsa.tsa-edge .btn.wide { height: 50px; }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) :focus-visible { outline-color: var(--brown); }
+
+/* ---- the quiet actions: Edit, Change, Remove ---- */
+.tsa.tsa-edge .chg, .tsa.tsa-edge .stp > header .edit, .tsa.tsa-edge .pre-row > em {
+  font-family: var(--f-cond); font-stretch: 75%; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; font-size: 11.5px;
+  color: var(--coral); text-decoration: none; white-space: nowrap;
+}
+.tsa.tsa-edge .chg:hover, .tsa.tsa-edge .pre-row:hover > em { text-decoration: underline; text-underline-offset: 4px; }
+.tsa.tsa-edge .addr-set .chg { color: var(--sage); }
+
+/* ---- the paper: colours only ---- */
+:is(.tsa-edge, .tsl-edge) .tsp .terms { box-shadow: none; border: 1px solid var(--line); }
+:is(.tsa-edge, .tsl-edge) .tsp .blank { background: var(--wash); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--brown); padding: 0 8px; }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .fld.empty { background: var(--wash); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--brown); }
+:is(.tsa-edge, .tsl-edge) .tsp .t-sig.you { background: var(--wash); border-color: var(--brown); }
+:is(.tsa-edge, .tsl-edge) .tsp .fld.flash { background: #e9e4d9; box-shadow: 0 0 0 4px #e9e4d9; }
+.tsl.tsl-edge .fld.check { background: var(--wash); box-shadow: 0 0 0 2px #e9e4d9; }
+
+/* ---- the signature pads ---- */
+:is(.tsa.tsa-edge, .tsl.tsl-edge) :is(.pad, .typed) { background: var(--wash); border: 1px dashed var(--brown); }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .pad .base { border-top-color: rgba(86, 66, 62, .3); }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .pad :is(.x, .hint) { color: rgba(86, 66, 62, .55); }
+.tsa.tsa-edge .pad.up:hover, .tsa.tsa-edge .pad.up.over, .tsl.tsl-edge .pad.up:hover, .tsl.tsl-edge .pad.up.over { background: var(--coral-soft); }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .pad.up .up-say { color: var(--brown); }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .pad.up .up-say small { color: var(--muted); }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .seg { background: none; padding: 0; border: 1px solid var(--line-2); margin-bottom: 14px; }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .seg button { font-family: var(--f-cond); font-stretch: 75%; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; font-size: 11.5px; padding: 9px 16px; }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .seg button + button { border-left: 1px solid var(--line-2); }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .seg button.on { background: var(--ink); color: #fff; box-shadow: none; }
+
+/* ===========================================================================
+   THE AGENT'S SCREEN
+=========================================================================== */
+.tsa.tsa-edge .sheet-wrap { background: var(--grey); }
+.tsa.tsa-edge .sheet-top .pages button { font-family: var(--f-cond); font-stretch: 75%; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; font-size: 11.5px; padding: 6px 10px; }
+.tsa.tsa-edge .sheet-top .pages button.on, .tsa.tsa-edge .sheet-top .pages button:hover { background: none; color: var(--ink); box-shadow: inset 0 -2px 0 var(--coral); }
+.tsa.tsa-edge .which { box-shadow: none; border-color: var(--line-2); font-family: var(--f-cond); font-stretch: 75%; text-transform: uppercase; letter-spacing: .1em; font-size: 11px; }
+
+/* The side panel, pulled out (James: "really, really cramped ... pull that out slightly"). */
+.tsa.tsa-edge .send { grid-template-columns: minmax(0, 1fr) clamp(500px, 41vw, 640px); }
+.tsa.tsa-edge .p-head { padding: 26px 36px 22px; }
+.tsa.tsa-edge .p-head p { font-size: 14px; line-height: 1.5; max-width: 46ch; }
+.tsa.tsa-edge .p-body { padding: 6px 36px 32px; }
+.tsa.tsa-edge .p-foot { padding: 18px 36px 22px; background: var(--grey); }
+.tsa.tsa-edge .stp { padding: 22px 0; }
+.tsa.tsa-edge .stp > header { grid-template-columns: 32px 1fr auto; gap: 16px; }
+.tsa.tsa-edge .stp > header i { width: 32px; height: 32px; font-family: var(--f-cond); font-stretch: 75%; font-size: 15px; font-weight: 600; background: none; border: 1px solid var(--line-2); color: var(--muted); }
+.tsa.tsa-edge .stp.on > header i { background: var(--brown); border-color: var(--brown); color: #fff; }
+.tsa.tsa-edge .stp.ok > header i { background: var(--sage); border-color: var(--sage); color: #fff; }
+.tsa.tsa-edge .stp > header b { font-family: var(--f-cond); font-stretch: 75%; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; font-size: 19px; line-height: 1.15; }
+.tsa.tsa-edge .stp > header span span { font-size: 13.5px; margin-top: 2px; }
+.tsa.tsa-edge .stp .body { padding: 22px 0 6px; }
+.tsa.tsa-edge .go { margin-top: 26px; }
+
+/* One line, one Edit (James: "an edit button next to each set ... click Setup Fee and that will just change the setup fee"). */
+.tsa.tsa-edge .fgroup + .fgroup, .tsa.tsa-edge .fmore + .fgroup { margin-top: 34px; }
+.tsa.tsa-edge .fgroup-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0; padding-bottom: 10px; border-bottom: 1px solid var(--ink); font-family: var(--f-cond); font-stretch: 75%; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; font-size: 12px; color: var(--ink); }
+.tsa.tsa-edge .frow { display: grid; grid-template-columns: 132px minmax(0, 1fr) auto; column-gap: 18px; align-items: baseline; padding: 14px 0; border-bottom: 1px solid var(--line); min-height: 52px; }
+.tsa.tsa-edge .frow > .fk { font-size: 13px; color: var(--muted); }
+.tsa.tsa-edge .frow > .fv { font-size: 14.5px; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; min-width: 0; }
+.tsa.tsa-edge .frow > .fv small { display: block; font-size: 12.5px; font-weight: 400; color: var(--faint); margin-top: 3px; }
+.tsa.tsa-edge .frow > .fv .miss { font-style: normal; font-weight: 400; color: var(--coral); }
+.tsa.tsa-edge .frow > .fv .none { font-style: normal; font-weight: 400; color: var(--faint); }
+.tsa.tsa-edge .frow.on { background: var(--wash); margin: 0 -14px; padding: 16px 14px; align-items: start; }
+.tsa.tsa-edge .frow.on > .fk { padding-top: 13px; color: var(--ink); }
+/* Edit is a button, not a link: easy to find, one per line. */
+.tsa.tsa-edge .frow > .chg { align-self: center; padding: 7px 12px; border: 1px solid var(--line-2); background: #fff; color: var(--ink); font-size: 11px; line-height: 1; cursor: pointer; transition: background .2s, border-color .2s, color .2s; }
+.tsa.tsa-edge .frow > .chg:hover { background: var(--brown); border-color: var(--brown); color: #fff; text-decoration: none; }
+.tsa.tsa-edge .frow.on > .chg { align-self: start; margin-top: 9px; background: var(--brown); border-color: var(--brown); color: #fff; }
+.tsa.tsa-edge .frow .ac input, .tsa.tsa-edge .frow .ac select, .tsa.tsa-edge .addr .ac input { height: 46px; background: #fff; border: 1px solid var(--line-2); font-size: 14.5px; font-weight: 400; }
+.tsa.tsa-edge .frow .ac input:focus, .tsa.tsa-edge .frow .ac select:focus, .tsa.tsa-edge .addr .ac input:focus { border-color: var(--brown); }
+.tsa.tsa-edge .frow .fhelp { display: block; margin-top: 6px; font-size: 12.5px; font-weight: 400; color: var(--muted); }
+.tsa.tsa-edge .fmore { display: flex; justify-content: flex-start; padding: 16px 0 0; }
+.tsa.tsa-edge .frow .quick { margin-top: 10px; }
+.tsa.tsa-edge .quick button { font-size: 13px; padding: 7px 12px; }
+.tsa.tsa-edge .quick button:hover { border-color: var(--brown); background: var(--coral-soft); }
+.tsa.tsa-edge .todo-in, .tsa.tsa-edge .err { font-size: 13.5px; margin-top: 12px; }
+.tsa.tsa-edge .legal { font-size: 12.5px; color: var(--muted); }
+
+/* Before they sign: the same room. */
+.tsa.tsa-edge .pre-lead, .tsa.tsa-edge .pre-count { font-size: 14px; }
+.tsa.tsa-edge .pre-row { padding-top: 14px; padding-bottom: 14px; }
+.tsa.tsa-edge .pre-row > i { width: 24px; height: 24px; }
+.tsa.tsa-edge .pre-row > span b { font-size: 14.5px; }
+.tsa.tsa-edge .pre-row > span span { font-size: 13px; margin-top: 2px; }
+.tsa.tsa-edge .pre-q { padding-bottom: 6px; }
+.tsa.tsa-edge .pre-q .tq-l { font-size: 14.5px; }
+.tsa.tsa-edge .pre-relist { background: var(--coral-soft); font-size: 13.5px; }
+
+/* Signing: the saved signature in one press. */
+.tsa.tsa-edge .signer { font-size: 13.5px; margin-bottom: 14px; }
+.tsa.tsa-edge .pad, .tsa.tsa-edge .typed { height: 190px; }
+.tsa.tsa-edge .one-press { display: grid; gap: 14px; }
+.tsa.tsa-edge .one-press .ink-box { display: grid; place-items: center; height: 150px; background: var(--wash); border: 1px solid var(--line-2); }
+.tsa.tsa-edge .one-press .ink-box img { height: 84px; max-width: 86%; object-fit: contain; }
+.tsa.tsa-edge .one-press .alt { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; font-size: 13px; color: var(--muted); }
+.tsa.tsa-edge .signed-as { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--sage-soft); color: #3f4f37; font-size: 13.5px; }
+.tsa.tsa-edge .signed-as .chg { margin-left: auto; color: var(--sage); }
+.tsa.tsa-edge .mail, .tsa.tsa-edge .next3, .tsa.tsa-edge .missed { border-color: var(--line-2); }
+.tsa.tsa-edge .missed { background: var(--wash); border-color: var(--coral); }
+
+/* The envelope, in clay. */
+.tsa.tsa-edge .fly { background: rgba(248, 247, 244, .9); }
+.tsa.tsa-edge .env .back { background: #c4a092; }
+.tsa.tsa-edge .env .front { background: linear-gradient(to top right, #b48e7f 50%, transparent 50.5%) left / 50.5% 100% no-repeat, linear-gradient(to top left, #bc9788 50%, transparent 50.5%) right / 50.5% 100% no-repeat; }
+.tsa.tsa-edge .env .flap { background: linear-gradient(to bottom, #a98374, #bc9788); }
+.tsa.tsa-edge .env .letter { box-shadow: none; border: 1px solid var(--line); }
+.tsa.tsa-edge .ticks li.warn i { background: var(--coral-soft); }
+
+@media (max-width: 1100px) {
+  .tsa.tsa-edge .send { grid-template-columns: 1fr; }
+  .tsa.tsa-edge .p-head, .tsa.tsa-edge .p-body, .tsa.tsa-edge .p-foot { padding-left: 20px; padding-right: 20px; }
+  .tsa.tsa-edge .p-head h2 { font-size: 32px; }
+}
+@media (max-width: 560px) {
+  .tsa.tsa-edge .frow { grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; }
+  .tsa.tsa-edge .frow > .fk { grid-column: 1 / -1; }
+  .tsa.tsa-edge .frow.on { margin: 0; padding: 14px 12px; align-items: center; }
+  .tsa.tsa-edge .frow.on > .fk { grid-column: 1; grid-row: 1; padding-top: 0; }
+  .tsa.tsa-edge .frow.on > .fv { grid-column: 1 / -1; grid-row: 2; margin-top: 6px; }
+  .tsa.tsa-edge .frow.on > .chg { grid-row: 1; grid-column: 2; margin-top: 0; }
+}
+
+/* ===========================================================================
+   THE LANDLORD'S PAGE
+=========================================================================== */
+.tsl.tsl-edge { background: var(--grey); }
+.tsl.tsl-edge .top { background: rgba(248, 247, 244, .96); }
+.tsl.tsl-edge .layout { grid-template-columns: minmax(0, 1fr) 380px; }
+.tsl.tsl-edge :is(.rail, .hello, .bys-card, .copy, .nexts) { border: 1px solid var(--line); }
+.tsl.tsl-edge .rail { padding: 26px; }
+.tsl.tsl-edge .rail > p { font-size: 14px; margin-bottom: 18px; }
+.tsl.tsl-edge .todo li { grid-template-columns: 30px 1fr; gap: 14px; padding: 14px 0; }
+.tsl.tsl-edge .todo li i, .tsl.tsl-edge .nexts i { width: 28px; height: 28px; font-family: var(--f-cond); font-stretch: 75%; font-size: 14px; font-weight: 600; background: none; border: 1px solid var(--line-2); color: var(--muted); }
+.tsl.tsl-edge .todo li.on i { background: var(--brown); border-color: var(--brown); color: #fff; }
+.tsl.tsl-edge .todo li.ok i { background: var(--sage); border-color: var(--sage); color: #fff; }
+.tsl.tsl-edge .todo li b { font-size: 15px; }
+.tsl.tsl-edge .todo li span span { font-size: 13px; }
+.tsl.tsl-edge .av { background: var(--coral-soft); color: var(--brown); font-family: var(--f-ui); font-weight: 600; font-size: 12px; letter-spacing: .02em; }
+.tsl.tsl-edge .tap { background: var(--coral-soft); color: var(--brown); animation: te-nudge 2.4s ease-in-out infinite; }
+@keyframes te-nudge { 50% { box-shadow: 0 0 0 6px rgba(168, 90, 81, .16); } }
+.tsl.tsl-edge .cools button.on { border-color: var(--brown); background: var(--wash); }
+.tsl.tsl-edge .cools button.on::after { border-color: var(--brown); }
+.tsl.tsl-edge .sheet .panel { border-top: 2px solid var(--brown); }
+.tsl.tsl-edge .seal { background: rgba(248, 247, 244, .92); }
+.tsl.tsl-edge .mini { box-shadow: none; border: 1px solid var(--line-2); }
+.tsl.tsl-edge .ask-menu { box-shadow: none; border-color: var(--line-2); }
+.tsl.tsl-edge .calm-ic { background: var(--coral-soft); color: var(--brown); }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .done-tick { background: var(--sage); border-radius: 0; }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .done-tick circle { fill: transparent; }
+.tsl.tsl-edge .sheet .panel { padding-bottom: calc(30px + env(safe-area-inset-bottom, 0px)); }
+.tsl.tsl-edge .bys-list li::before { border-radius: 0; }
+.tsl.tsl-edge .bys-g.warn { border-color: var(--coral); }
+
+/* Answer buttons and chips, squared by the rule above; the chosen one in brown. */
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .tq-opts button.on { background: var(--brown); border-color: var(--brown); }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .tq-opts button:hover { border-color: var(--brown); }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .tq-chips button.on { color: var(--brown); box-shadow: inset 0 0 0 1px var(--brown); }
+:is(.tsa.tsa-edge, .tsl.tsl-edge) .tq :is(input, textarea):focus { border-color: var(--brown); }
+
+/* Upload it now: a certificate they already hold, beside the answer that says so. */
+.tq-up { margin-top: 12px; padding: 16px; background: var(--wash, #f8f7f4); border: 1px solid var(--line-2); border-left: 2px solid var(--coral, #a85a51); display: grid; gap: 12px; }
+.tq-up:has(.tq-up-done) { padding: 0; border: 0; background: none; }
+.tq-up p { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.45; }
+.tq-up p b { color: var(--ink); font-weight: 500; }
+.tq-up .tq-up-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.tq-up label.btn { cursor: pointer; height: 44px; padding: 0 18px; }
+.tq-up label.btn[aria-disabled="true"] { opacity: .5; pointer-events: none; }
+.tq-up .tq-up-skip { font-size: 13px; color: var(--faint); }
+.tq-up .tq-up-done { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--sage-soft); border: 1px solid var(--line-2); border-left: 2px solid var(--sage, #56634a); color: var(--ink); font-size: 13.5px; }
+.tq-up .tq-up-done svg { width: 18px; height: 18px; flex: none; color: var(--sage, #56634a); }
+.tq-up .tq-up-done span { min-width: 0; overflow-wrap: anywhere; }
+.tq-up .tq-up-done label { margin-left: auto; cursor: pointer; white-space: nowrap; padding: 7px 12px; border: 1px solid var(--line-2); background: #fff; font-family: var(--f-cond); font-stretch: 75%; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; font-size: 11px; line-height: 1; }
+.tq-up .tq-up-done label:hover { background: var(--brown, #56423e); border-color: var(--brown, #56423e); color: #fff; }
+.tq-up .tq-up-bad { font-size: 13px; color: var(--coral); }
+
+/* Signing, on the landlord's sheet: a taller pad, and the picture of a signature they already have. */
+.tsl.tsl-edge .pad, .tsl.tsl-edge .typed { height: 210px; }
+.tsl.tsl-edge .pad.up { display: grid; place-items: center; cursor: pointer; touch-action: auto; }
+.tsl.tsl-edge .pad.up .up-say { display: grid; justify-items: center; gap: 4px; padding: 0 18px; text-align: center; font-size: 14px; }
+.tsl.tsl-edge .pad.up .up-say b { font-weight: 500; }
+.tsl.tsl-edge .pad.up .up-say small { font-size: 12.5px; line-height: 1.4; max-width: 300px; }
+.tsl.tsl-edge .pad.up .up-say .ic { width: 22px; height: 22px; margin-bottom: 2px; }
+.tsl.tsl-edge .pad.up img { max-height: 120px; max-width: 86%; object-fit: contain; }
+.tsl.tsl-edge .sign-how { display: grid; gap: 6px; margin: 0 0 14px; padding: 0; list-style: none; font-size: 13.5px; color: var(--muted); }
+.tsl.tsl-edge .sign-how li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: baseline; }
+.tsl.tsl-edge .sign-how li i { font-style: normal; font-family: var(--f-cond); font-stretch: 75%; font-weight: 600; font-size: 13px; color: var(--coral); }
+.tsl.tsl-edge .sign-how li b { color: var(--ink); font-weight: 500; }
+
+@media (max-width: 999px) {
+  .tsl.tsl-edge { background: #fff; }
+  .tsl.tsl-edge .layout { grid-template-columns: 1fr; }
+  .tsl.tsl-edge :is(.hello, .bys-card) { border-left: 0; border-right: 0; }
+  .tsl.tsl-edge .hello { background: var(--grey); }
+  .tsl.tsl-edge .bar { border-top: 1px solid var(--line-2); }
+  .tsl.tsl-edge .pad, .tsl.tsl-edge .typed { height: min(46dvh, 300px); }
+  .tsl.tsl-edge .done h1, .tsl.tsl-edge .seal h3, .tsl.tsl-edge .bys-intro h1 { font-size: 32px; }
+}

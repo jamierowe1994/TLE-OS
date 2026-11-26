@@ -4301,6 +4301,11 @@ CREATE INDEX IF NOT EXISTS os_landlord_documents_account
 -- A landlord's certificate becomes a real certificate when compliance checks
 -- it (4 Oct 2026): the os_certificates row it was filed as.
 ALTER TABLE os_landlord_documents ADD COLUMN IF NOT EXISTS certificate_id TEXT;
+-- A certificate uploaded from the landlord's own signing link (26 Nov 2026): terms sent from a
+-- listing have no appraisal, so the home and its agent are kept on the row itself.
+ALTER TABLE os_landlord_documents ADD COLUMN IF NOT EXISTS property_id TEXT;
+ALTER TABLE os_landlord_documents ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE os_landlord_documents ADD COLUMN IF NOT EXISTS agent TEXT;
 
 -- ── AND THE TENANT'S, added 15 Sep 2026 ──────────────────────────────────
 --

@@ -42,7 +42,7 @@ export async function storeLandlordPages(d: {
   kind: DocKind;
   files: File[];
   label?: string;
-  via?: "portal" | "handoff";
+  via?: "portal" | "handoff" | "sign";
 }): Promise<StoreResult> {
   const files = d.files.filter((f) => f instanceof File && f.size > 0);
   if (files.length === 0) return { ok: false, status: 400, error: "No file was attached." };
@@ -75,7 +75,7 @@ export async function storeLandlordDocument(d: {
   kind: DocKind;
   file: File;
   /** How it arrived, for the object's own metadata: a session, or a QR. */
-  via?: "portal" | "handoff";
+  via?: "portal" | "handoff" | "sign";
 }): Promise<StoreResult> {
   if (!hasDb()) return { ok: false, status: 503, error: "No database on this environment." };
   if (!r2Configured) {

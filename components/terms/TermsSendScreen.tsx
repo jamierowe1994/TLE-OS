@@ -2,6 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useNewLook } from "@/lib/use-new-look";
 import TermsPaper, { Blank, type PaperPerson } from "@/components/terms/TermsPaper";
 import { isScottish } from "@/lib/property-flags";
 import { signatureFromPhoto } from "@/lib/terms/signature-photo";
@@ -370,8 +371,10 @@ export default function TermsSendScreen({
   const serviceLabel = servicesFor(country, rlp).find((o) => o.id === service)?.label ?? service;
 
   /* One part of step 1 open for changing at a time; who signs starts open when we don't know them well enough to send. */
+  /* The house style (switch "termslook", James, 26 Nov 2026): the panel wider, and one Edit per line. */
+  const edge = useNewLook("termslook") === true;
   type Part = "people" | "property" | "country" | "fees" | "larn";
-  const [editing, setEditing] = useState<Part | null>(() =>
+  const [editing, setEditing] = useState<Part | string | null>(() =>
     !signing && people.some((p) => !p.name.trim() || !EMAIL.test(p.email.trim())) ? "people" : null
   );
 
@@ -1146,13 +1149,226 @@ export default function TermsSendScreen({
     </div>
   );
 
+  /* ── Step 1 in the house style: every line on its own, each with its own Edit (James, 26 Nov 2026:
+     "an edit button next to each set ... they can click Setup Fee, and that will just change the setup fee,
+     rather than having one button which says Change and then they're trying to change everything"). ── */
+  const firstGap = (() => {
+    for (let i = 0; i < people.length; i++) {
+      if (!people[i].name.trim()) return `name:${i}`;
+      if (!EMAIL.test(people[i].email.trim())) return `email:${i}`;
+    }
+    return null;
+  })();
+  /* "people" is how the screen opens when somebody who signs is missing a name or an email: the first line that needs it. */
+  const ed = editing === "people" ? firstGap : editing;
+  const frow = (key: string, label: string, value: React.ReactNode, editor: React.ReactNode | null, word = "Edit") => {
+    const on = ed === key && !locked && editor != null;
+    return (
+      <div className={`frow${on ? " on" : ""}`} key={key}>
+        <span className="fk">{label}</span>
+        <div className="fv">{on ? editor : value}</div>
+        {!locked && editor != null ? (
+          <button type="button" className="chg" aria-label={`${on ? "Done with" : word} ${label}`} onClick={() => setEditing(on ? null : key)}>
+            {on ? "Done" : word}
+          </button>
+        ) : (
+          <span />
+        )}
+      </div>
+    );
+  };
+  const box = (value: string, set: (v: string) => void, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
+    <div className="ac">
+      <input autoFocus value={value} onChange={(e) => set(e.target.value)} onKeyDown={(e) => e.key === "Enter" && setEditing(null)} autoComplete="off" {...props} />
+    </div>
+  );
+  const miss = (text: string) => <em className="miss">{text}</em>;
+  const none = (text: string) => <em className="none">{text}</em>;
+
+  const stepOneEdge = (
+    <div className="body">
+      {people.map((p, i) => {
+        const homeKey = `home:${i}`;
+        const homeOn = ed === homeKey && !locked;
+        return (
+          <div className="fgroup" key={i}>
+            <h3 className="fgroup-h">
+              <span>{people.length > 1 ? `Landlord ${i + 1}` : "The Landlord"}</span>
+              {!locked && people.length > 1 ? (
+                <button type="button" className="chg" onClick={() => { setEditing(null); setPeople((ps) => ps.filter((_, j) => j !== i)); }}>Remove</button>
+              ) : null}
+            </h3>
+            {frow(`name:${i}`, "Name", p.name.trim() || miss("No name yet"), box(p.name, (v) => setPerson(i, { name: v }), { placeholder: "Full name" }), p.name.trim() ? "Edit" : "Add")}
+            {frow(
+              `email:${i}`,
+              "Email",
+              p.email.trim() ? (EMAIL.test(p.email.trim()) ? p.email.trim() : <>{p.email.trim()} {miss("Not an email address")}</>) : miss("No email yet"),
+              <>
+                {box(p.email, (v) => setPerson(i, { email: v }), { type: "email", placeholder: "name@example.com" })}
+                <span className="fhelp">Their own link to read and sign goes here.</span>
+              </>,
+              p.email.trim() ? "Edit" : "Add"
+            )}
+            {frow(`phone:${i}`, "Mobile", p.phone.trim() || none("Not given"), box(p.phone, (v) => setPerson(i, { phone: v }), { type: "tel", placeholder: "Optional" }), p.phone.trim() ? "Edit" : "Add")}
+            <div className={`frow${homeOn ? " on" : ""}`}>
+              <span className="fk">Home address</span>
+              <div className="fv">
+                {homeOn ? (
+                  <>
+                    <HomeSearch
+                      id={`tsa-home-${i}`}
+                      start={p.home}
+                      onType={(home) => setPerson(i, { home, homeIs: "unset" })}
+                      onSet={(home) => {
+                        setPerson(i, { home, homeIs: "set" });
+                        setEditing(null);
+                        flash(`ts-home-l${i + 1}`);
+                      }}
+                    />
+                    <span className="fhelp">It goes on the contract. Pick it from the list, or type it in full: number or house name, street, town and postcode, or the town and country for a home abroad.</span>
+                    <div className="quick">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPerson(i, { home: address.trim(), homeIs: "set" });
+                          setEditing(null);
+                          flash(`ts-home-l${i + 1}`);
+                        }}
+                      >
+                        They live at the let property
+                      </button>
+                      <button type="button" onClick={() => { setPerson(i, { home: "", homeIs: "skip" }); setEditing(null); }}>Send without it</button>
+                    </div>
+                  </>
+                ) : p.homeIs === "set" || (p.homeIs === "unset" && p.home.trim()) ? (
+                  <>
+                    {p.home}
+                    {p.homeIs === "set" && p.found && p.found.address === p.home ? <small>From {FOUND_FROM[p.found.source] ?? "their record"}: check it is still right.</small> : null}
+                  </>
+                ) : (
+                  <>
+                    {none("Not given")}
+                    <small>They add it before they sign.</small>
+                  </>
+                )}
+              </div>
+              {!locked ? (
+                <button
+                  type="button"
+                  className="chg"
+                  aria-label={`${homeOn ? "Done with" : "Edit"} home address`}
+                  onClick={() => {
+                    if (homeOn) return setEditing(null);
+                    if (p.homeIs !== "unset") setPerson(i, { homeIs: "unset" });
+                    setEditing(homeKey);
+                  }}
+                >
+                  {homeOn ? "Done" : p.home.trim() && p.homeIs !== "skip" ? "Edit" : "Add"}
+                </button>
+              ) : (
+                <span />
+              )}
+            </div>
+          </div>
+        );
+      })}
+      {!locked ? (
+        <div className="fmore">
+          <button
+            type="button"
+            className="chg"
+            onClick={() => {
+              setEditing(`name:${people.length}`);
+              setPeople((ps) => [...ps, { name: "", email: "", phone: "", home: "", homeIs: "unset" }]);
+            }}
+          >
+            Add Another Landlord
+          </button>
+        </div>
+      ) : null}
+
+      <div className="fgroup">
+        <h3 className="fgroup-h"><span>The Home</span></h3>
+        {frow("property", "Property", address.trim() || miss("No address yet"), box(address, setAddress, { placeholder: "The address of the home to let" }), address.trim() ? "Edit" : "Add")}
+        {frow(
+          "country",
+          "Terms",
+          <>
+            {country === "scotland" ? "Scotland" : "England"} · {editionLine(country)}
+            <small>Follows the postcode</small>
+          </>,
+          null
+        )}
+      </div>
+
+      <div className="fgroup">
+        <h3 className="fgroup-h"><span>Service and Fees</span></h3>
+        {frow(
+          "service",
+          "Service",
+          serviceLabel,
+          <>
+            <div className="ac">
+              <select autoFocus value={service} onChange={(e) => pickService(e.target.value)}>
+                {servicesFor(country, rlp).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+              </select>
+            </div>
+            <span className="fhelp">Changing the service puts its usual fees in below.</span>
+          </>
+        )}
+        {frow("setup", "Set-up fee", setUpFee.trim() || miss("Not set"), box(setUpFee, setSetUpFee), setUpFee.trim() ? "Edit" : "Add")}
+        {frow("management", "Management fee", managementFee.trim() || miss("Not set"), box(managementFee, setManagementFee, { placeholder: "e.g. 10% + VAT of the rent each month" }), managementFee.trim() ? "Edit" : "Add")}
+        {frow("additional", "Additional fees", additional.trim() || none("None"), box(additional, setAdditional, { placeholder: "None" }), additional.trim() ? "Edit" : "Add")}
+        {country === "scotland" &&
+          frow(
+            "larn",
+            "Your LARN",
+            larn.trim() || miss("Not recorded"),
+            <>
+              {box(larn, setLarn, { placeholder: "LARN1234567" })}
+              <span className="fhelp">Printed in clause 1 beside The Letting Experts&apos; own.</span>
+            </>,
+            larn.trim() ? "Edit" : "Add"
+          )}
+      </div>
+
+      {locked && <p className="legal">This contract is made with these details. To change them, close this, withdraw it on the file and start again.</p>}
+      <button type="button" className="btn primary wide go" disabled={!locked && Boolean(detailsProblem)} onClick={detailsRight}>
+        These Are Right <Ic k="arrow" />
+      </button>
+      {!locked && detailsProblem ? <p className="todo-in">{detailsProblem}</p> : null}
+    </div>
+  );
+
   /* ── Step 2 ── */
+  /* In the house style a saved signature is one press: it is shown, and the button under it signs. */
+  const onePress = edge && mode === "saved" && Boolean(saved);
+  const another = (m: "draw" | "type" | "upload") => { modeTouched.current = true; setSignProblem(null); setMode(m); };
   const stepTwo = (
     <div className="body">
       <div className="signer">
         <span>Signing as <b>{agentName || "…"}</b></span>
         <span>Dated <b>{today}</b></span>
       </div>
+      {onePress && saved ? (
+        <div className="one-press">
+          <div className="ink-box">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={saved} alt="Your saved signature" />
+          </div>
+          <button type="button" className="btn primary wide" ref={signBtn} onClick={() => void signIt()}>
+            <Ic k="pen" /> Sign With My Signature
+          </button>
+          <div className="alt">
+            <span>Or sign another way:</span>
+            <button type="button" className="chg" onClick={() => another("draw")}>Draw</button>
+            <button type="button" className="chg" onClick={() => another("type")}>Type</button>
+            <button type="button" className="chg" onClick={() => another("upload")}>Upload</button>
+            <button type="button" className="chg" onClick={() => void forgetSaved()}>Forget Mine</button>
+          </div>
+        </div>
+      ) : (
+      <>
       <div className="seg">
         {saved ? (
           <button type="button" className={mode === "saved" ? "on" : ""} onClick={() => { modeTouched.current = true; setMode("saved"); }}>My signature</button>
@@ -1230,14 +1446,18 @@ export default function TermsSendScreen({
           </label>
         </>
       )}
+      </>
+      )}
       <p className="legal">
         By signing you agree to these terms on behalf of The Letting Experts. {people.length > 1 ? "They" : firstOf(people[0]?.name ?? "") || "They"} can&apos;t open the contract until you&apos;ve signed.
       </p>
       {preview && <p className="legal">This machine isn&apos;t connected to DocuSeal, so this is a preview: your signature goes on the page, and nothing is sealed or filed.</p>}
       {signProblem && <p className="err">{signProblem}</p>}
-      <button type="button" className="btn primary wide go" ref={signBtn} onClick={() => void signIt()}>
-        <Ic k="pen" /> Sign
-      </button>
+      {!onePress && (
+        <button type="button" className="btn primary wide go" ref={signBtn} onClick={() => void signIt()}>
+          <Ic k="pen" /> Sign
+        </button>
+      )}
     </div>
   );
 
@@ -1469,7 +1689,7 @@ export default function TermsSendScreen({
     {
       k: S.details,
       title: "Check the details",
-      body: stepOne,
+      body: edge ? stepOneEdge : stepOne,
       sum: okDetails ? `${people.map((p) => p.name.trim()).join(", ")} · ${serviceLabel}` : "The names, the home and the fees",
       can: true,
       done: okDetails,
@@ -1614,7 +1834,7 @@ export default function TermsSendScreen({
   );
 
   return createPortal(
-    <div className="tsa tsa-screen" role="dialog" aria-modal="true" aria-label={`${lead} to ${fullNames}`}>
+    <div className={`tsa tsa-screen${edge ? " tsa-edge" : ""}`} role="dialog" aria-modal="true" aria-label={`${lead} to ${fullNames}`}>
       <div className="send">
         <div className="sheet-wrap">
           <div className="sheet-top">

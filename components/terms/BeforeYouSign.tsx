@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import QuestionField from "@/components/terms/QuestionField";
+import CertUpload from "@/components/terms/CertUpload";
 import { KEPT, PROPERTY_QUESTIONS, asked, cardAsked, cardKey, filled, stepDone, wants, type Answers, type QuestionStep } from "@/lib/property-questions";
 import { askedOf, detailText } from "@/lib/terms/detail-text";
 import type { DetailField, LandlordDetails, TermsDoc } from "@/lib/terms/types";
@@ -74,6 +75,9 @@ export type BeforeProps = {
   onDone: (details: Partial<LandlordDetails>, answers: Answers) => void;
   /** Came back to look over their answers: straight to the check screen. */
   review?: boolean;
+  /** Where a certificate they hold can be uploaded as they answer, and the ones already sent from this link. */
+  uploadUrl?: string | null;
+  uploads?: Record<string, string>;
 };
 
 const blank = (v: unknown) => String(v ?? "").trim() === "";
@@ -370,6 +374,11 @@ export default function BeforeYouSign(p: BeforeProps) {
                   q={q}
                   answers={answers}
                   onChange={answer}
+                  extra={
+                    p.uploadUrl && q.upload && q.upload.kind !== "other" && q.upload.when.includes(String(answers[q.id] ?? "")) ? (
+                      <CertUpload url={p.uploadUrl} kind={q.upload.kind} title={q.upload.title} had={p.uploads?.[q.upload.kind] ?? null} />
+                    ) : null
+                  }
                   by={
                     p.hints?.[q.id] && !filled(answers[q.id])
                       ? `Our file shows ${p.hints[q.id]}. Choose the answer yourself: it goes on your contract.`
@@ -462,7 +471,18 @@ export default function BeforeYouSign(p: BeforeProps) {
         <Head title={extra.title} blurb={extra.blurb} />
         <div className="tq">
           {extra.questions.map((q) => (
-            <QuestionField key={q.id} q={q} answers={answers} onChange={answer} by={p.answeredBy[q.id] === "agent" && filled(answers[q.id]) ? `${p.agentFirst} filled this in.` : null} />
+            <QuestionField
+              key={q.id}
+              q={q}
+              answers={answers}
+              onChange={answer}
+              extra={
+                p.uploadUrl && q.upload && q.upload.kind !== "other" && q.upload.when.includes(String(answers[q.id] ?? "")) ? (
+                  <CertUpload url={p.uploadUrl} kind={q.upload.kind} title={q.upload.title} had={p.uploads?.[q.upload.kind] ?? null} />
+                ) : null
+              }
+              by={p.answeredBy[q.id] === "agent" && filled(answers[q.id]) ? `${p.agentFirst} filled this in.` : null}
+            />
           ))}
         </div>
         {err && <p className="bys-err" role="alert">{err}</p>}

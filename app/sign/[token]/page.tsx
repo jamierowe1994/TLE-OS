@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import { signatureFromPhoto } from "@/lib/terms/signature-photo";
 import TermsPaper, { Blank, type PaperPerson } from "@/components/terms/TermsPaper";
 import BeforeYouSign from "@/components/terms/BeforeYouSign";
 import { askedOf, detailText } from "@/lib/terms/detail-text";
@@ -45,6 +46,8 @@ type View = {
   me: { key: string; name: string; details: Partial<LandlordDetails>; signedAt: string | null; fromFile?: Array<keyof LandlordDetails> };
   people: Array<{ key: string; name: string; signed: boolean; you: boolean }>;
   preview: boolean;
+  /** Certificates already uploaded from this link, by kind. */
+  uploads?: Record<string, string>;
   /** November 2026 on: the questions about the home come before the contract (James, 5 Nov 2026). */
   asks?: boolean;
   first?: boolean;
@@ -165,7 +168,7 @@ export default function SignPage() {
   /* Typed on a laptop, drawn on a phone (29 Oct 2026: two landlords took 6 and
      33 minutes over this page that morning; a signature drawn with a trackpad
      is the hard part). Draw stays one press away. */
-  const [mode, setMode] = useState<"draw" | "type">("draw");
+  const [mode, setMode] = useState<"draw" | "type" | "upload">("draw");
   useEffect(() => {
     if (!window.matchMedia("(pointer: coarse)").matches) setMode("type");
   }, []);
@@ -221,7 +224,7 @@ export default function SignPage() {
   }
   if (!view) {
     return (
-      <div className="tsl">
+      <div className="tsl tsl-edge">
         <Top />
         <div className="loading" role="status"><span className="spin" aria-hidden />Opening your terms…</div>
       </div>
@@ -274,7 +277,7 @@ export default function SignPage() {
     const waitDate = view.completedAt ? londonPlus(days, new Date(view.completedAt)) : null;
     const copyLink = complete && view.hasCopy ? `/api/sign/${encodeURIComponent(token)}/document` : null;
     return (
-      <div className="tsl">
+      <div className="tsl tsl-edge">
         <Top street={street} ask={ask} />
         <section className="view on">
           <div className="done">
@@ -376,7 +379,7 @@ export default function SignPage() {
         .then((r) => r.json())
         .catch(() => null);
     return (
-      <div className="tsl">
+      <div className="tsl tsl-edge">
         <Top street={street} ask={ask} />
         <BeforeYouSign
           doc={doc}
@@ -390,6 +393,8 @@ export default function SignPage() {
           fromFile={view.me.fromFile ?? []}
           bankOnFile={view.first ? view.bankOnFile ?? null : null}
           review={asking === "review"}
+          uploadUrl={`/api/sign/${encodeURIComponent(token)}/certificate`}
+          uploads={view.uploads ?? {}}
           askAgain={asking === "review" ? [] : view.askAgain ?? []}
           pulled={view.pulled ?? {}}
           hints={view.hints ?? {}}
@@ -571,7 +576,7 @@ export default function SignPage() {
   );
   const finishBtn = (
     <button type="button" className="btn primary wide" onClick={() => void finish()}>
-      <Ic k="check" sw={2.2} />Finish and sign
+      <Ic k="check" sw={2.2} />Finish and Sign
     </button>
   );
   const okBtn = (
@@ -581,7 +586,7 @@ export default function SignPage() {
   );
 
   return (
-    <div className="tsl">
+    <div className="tsl tsl-edge">
       <Top street={street} ask={ask} progress={doneCount / tasks.length} />
       <section className="view on">
         <div className="layout">
@@ -805,7 +810,7 @@ function AskAgent({ ask }: { ask: Ask }) {
 function Calm({ icon, title, tail, text, ask, action }: { icon: keyof typeof PATHS; title: string; tail: string; text: string; ask?: Ask; action?: React.ReactNode }) {
   const first = ask ? firstOf(ask.name) : "";
   return (
-    <div className="tsl">
+    <div className="tsl tsl-edge">
       <Top street={ask?.street} ask={ask} />
       <section className="view on">
         <div className="done">
@@ -894,8 +899,8 @@ function SignSheet({ open, name, today, mode, setMode, onAdopt, onClose }: {
   open: boolean;
   name: string;
   today: string;
-  mode: "draw" | "type";
-  setMode: (m: "draw" | "type") => void;
+  mode: "draw" | "type" | "upload";
+  setMode: (m: "draw" | "type" | "upload") => void;
   onAdopt: (png: string) => void;
   onClose: () => void;
 }) {
@@ -908,6 +913,19 @@ function SignSheet({ open, name, today, mode, setMode, onAdopt, onClose }: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   /* A finger on a phone, a mouse or trackpad on a laptop: the hint says which. */
+  /* Upload (26 Nov 2026): a photo of the signature they already use, the paper taken out, as the agent's screen does. */
+  const [upImg, setUpImg] = useState<string | null>(null);
+  const [upBusy, setUpBusy] = useState(false);
+  async function takePhoto(file: File | null | undefined) {
+    if (!file || upBusy) return;
+    setErr(null);
+    setUpBusy(true);
+    await new Promise((r) => window.setTimeout(r, 30));
+    const r = await signatureFromPhoto(file).catch(() => ({ ok: false as const, problem: "That picture couldn't be read here. Try another, or draw your signature instead." }));
+    setUpBusy(false);
+    if (r.ok) setUpImg(r.image);
+    else setErr(r.problem);
+  }
   const [touch, setTouch] = useState(true);
   useEffect(() => setTouch(window.matchMedia("(pointer: coarse)").matches), []);
 
@@ -1039,6 +1057,11 @@ function SignSheet({ open, name, today, mode, setMode, onAdopt, onClose }: {
       if (png) onAdopt(png);
       return;
     }
+    if (mode === "upload") {
+      if (!upImg) return setErr("Choose a photo of your signature first, or choose Draw or Type.");
+      onAdopt(upImg);
+      return;
+    }
     setBusy(true);
     const png = await typedPng().catch(() => null);
     setBusy(false);
@@ -1048,11 +1071,17 @@ function SignSheet({ open, name, today, mode, setMode, onAdopt, onClose }: {
 
   return (
     <Sheet open={open} onClose={onClose} label="ts-sheet-t">
-      <h3 id="ts-sheet-t">Your signature</h3>
+      <h3 id="ts-sheet-t">Your Signature</h3>
       <p className="who">Signing as <b>{name}</b> · {today}</p>
+      <ol className="sign-how">
+        <li><i>1</i><span><b>Sign below</b>: draw it, type it, or upload a photo of it.</span></li>
+        <li><i>2</i><span><b>See it on the contract</b>, in your box on the last page.</span></li>
+        <li><i>3</i><span><b>Press Finish and Sign</b> to seal it. Nothing is final until then.</span></li>
+      </ol>
       <div className="seg" role="tablist">
         <button type="button" role="tab" aria-selected={mode === "draw"} className={mode === "draw" ? "on" : ""} onClick={() => { setErr(null); setMode("draw"); }}>Draw</button>
         <button type="button" role="tab" aria-selected={mode === "type"} className={mode === "type" ? "on" : ""} onClick={() => { setErr(null); setMode("type"); }}>Type</button>
+        <button type="button" role="tab" aria-selected={mode === "upload"} className={mode === "upload" ? "on" : ""} onClick={() => { setErr(null); setMode("upload"); }}>Upload</button>
       </div>
       {mode === "draw" ? (
         <div className={`pad${inked ? " has" : ""}`} ref={padEl}>
@@ -1062,13 +1091,28 @@ function SignSheet({ open, name, today, mode, setMode, onAdopt, onClose }: {
           <span className="hint">{touch ? "Sign with your finger" : "Draw your signature with your mouse or trackpad"}</span>
           <button type="button" className="clr" onClick={clear}>Clear</button>
         </div>
+      ) : mode === "upload" ? (
+        <label className="pad up">
+          <input type="file" accept="image/png,image/jpeg,image/heic,image/heif,image/*" hidden disabled={upBusy} onChange={(e) => { void takePhoto(e.target.files?.[0]); e.target.value = ""; }} />
+          {upBusy ? (
+            <span className="up-say">Reading your signature…</span>
+          ) : upImg ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={upImg} alt="Your uploaded signature" />
+          ) : (
+            <span className="up-say">
+              <b>Choose a photo of your signature</b>
+              <small>Sign in dark pen on plain white paper and take a picture. The paper is taken out for you.</small>
+            </span>
+          )}
+        </label>
       ) : (
         <div className="typed" style={{ fontSize: name.length > 22 ? 36 : 52, padding: "0 16px", textAlign: "center", overflow: "hidden" }}>{name}</div>
       )}
       <p className="legal">By signing, you agree to these Terms of Business with The Letting Experts. Your name, the date and time are added to the signed copy.</p>
       {err && <p className="err" role="alert" style={{ margin: "0 0 12px" }}>{err}</p>}
       <button type="button" className="btn primary wide" disabled={busy} onClick={() => void sign()}>
-        <Ic k="pen" />{busy ? "Getting it ready…" : "Sign"}
+        <Ic k="pen" />{busy ? "Getting it ready…" : "Use This Signature"}
       </button>
     </Sheet>
   );
