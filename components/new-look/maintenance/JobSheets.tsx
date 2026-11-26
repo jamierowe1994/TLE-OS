@@ -5,6 +5,7 @@ import FloatSheet, { FloatCard, useFloatSheet } from "@/components/new-look/Floa
 import { Ico } from "@/components/new-look/Parts";
 import { CertificateUpload, LandlordSaysStep } from "@/components/WorksNow";
 import { JobForm, FORM_TITLE, type FormId } from "@/components/maintenance/JobForms";
+import { useNewLook } from "@/lib/use-new-look";
 import { StagePanel, stagesOf } from "@/components/maintenance/JobStages";
 import { STEPS } from "@/lib/works-steps";
 import { titleCase } from "@/components/maintenance/job-page";
@@ -21,11 +22,12 @@ import type { JobView } from "@/components/new-look/maintenance/JobPageNew";
  */
 export function JobSheets({ v }: { v: JobView }) {
   const { o, popUp, busy, err, closePop, openPop } = v;
+  const clear = useNewLook("moneystep") === true;
   if (!popUp) return null;
 
   if (popUp.kind === "form") {
     return (
-      <FloatSheet title={FORM_TITLE[popUp.form](o)} onClose={closePop} dismissible={!busy} screenKey={popUp.form}>
+      <FloatSheet title={FORM_TITLE[popUp.form](o, clear)} onClose={closePop} dismissible={!busy} screenKey={popUp.form}>
         <FormInSheet v={v} form={popUp.form} />
       </FloatSheet>
     );

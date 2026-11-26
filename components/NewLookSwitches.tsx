@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { LOOK_LEVELS, type LookLevel, type LookScreen } from "@/lib/new-look";
+import { refreshNewLook } from "@/lib/use-new-look";
 
 /**
  * The new look, screen by screen (lib/new-look). Each reskinned screen has its
@@ -44,6 +45,9 @@ export function useNewLookSwitches() {
       } catch {
         /* fine */
       }
+      /* And ask again now, so every screen on this page follows the change
+         without a refresh (lib/use-new-look). */
+      void refreshNewLook().catch(() => {});
     } catch (e) {
       setFlash(e instanceof Error ? e.message : "That did not save.");
     } finally {

@@ -13,6 +13,8 @@ import { FloatCard, FloatCardHead, FloatFoot } from "@/components/new-look/Float
 import { PAYRUN_LABEL, PAYRUN_LINE, PayrunTrack, awaitingPay } from "@/components/maintenance/works-ui";
 import { AskForQuotes, QuoteBoard } from "@/components/maintenance/QuoteAsks";
 import { readInvoiceFile, readLine } from "@/components/maintenance/read-invoice";
+import AddInvoice from "@/components/maintenance/AddInvoice";
+import { useNewLook } from "@/lib/use-new-look";
 import { maskedAccount, readBank, sortCodeWords } from "@/lib/bank";
 import TenantJobEmail, { DateEmail, isoOf } from "@/components/maintenance/TenantJobEmail";
 import type { MailWords } from "@/components/maintenance/WorksOrderEmail";
@@ -801,6 +803,14 @@ export function LandlordPaidNote({ o, onAddFile, onReopen }: { o: WorksOrder; on
 
 function Money({ o, f, setF, move, busy, onInvoiceLandlord, canPayrun = false }: StepProps & { onInvoiceLandlord: () => void; canPayrun?: boolean }) {
   const [paying, setPaying] = useState(false);
+  /* The clearer step (switch "moneystep", James, 26 Nov 2026): the contractor's
+     invoice first, one Add the Invoice, and Invoice the Landlord held back until
+     it is on. See components/maintenance/AddInvoice. */
+  const clear = useNewLook("moneystep") === true;
+  const waitingCheck = o.invoiceWaitPence != null;
+  const landlordHeld = clear && o.invoicePence == null
+    ? (waitingCheck ? "Check the contractor's invoice above first." : o.payee === "agent" ? "Add your receipt first." : "Add the contractor's invoice first.")
+    : null;
   /* The invoice itself, when it came by email (Rhiannon, 19 Oct 2026:
      contractors send it to the agent rather than use their link). It goes on
      the job's files first, so a failed upload saves nothing. */
@@ -841,7 +851,11 @@ function Money({ o, f, setF, move, busy, onInvoiceLandlord, canPayrun = false }:
   const payee = o.payee === "agent" ? `${o.raisedBy || "the agent"} (paid it themselves)` : o.contractorName || "the contractor";
   return (
     <div className="space-y-3">
-      {o.invoicePence == null ? (
+      {clear && o.invoicePence == null ? (
+        waitingCheck
+          ? <p className="rounded-xl border border-line/80 bg-card p-3 text-[12.5px] text-muted">The contractor sent their invoice from their own page. Check it above: once it&apos;s sent to accounts it shows here.</p>
+          : <AddInvoice o={o} f={f} setF={setF} move={move} busy={busy} />
+      ) : o.invoicePence == null ? (
         <div className="rounded-xl border border-line/80 bg-card p-3">
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted">{o.payee === "agent" ? "What you paid" : "The contractor's invoice"}</p>
           <p className="mt-1 text-[11.5px] text-muted">{o.payee === "agent" ? "Attach your receipt with the total." : "They can upload it from their page. If they emailed it to you, attach it here with the total."}</p>
@@ -893,9 +907,10 @@ function Money({ o, f, setF, move, busy, onInvoiceLandlord, canPayrun = false }:
         </div>
       )}
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={onInvoiceLandlord} className={o.invoicePence != null && o.status !== "paid" ? primary : btn} title="Drafts our invoice to the landlord: their name, the job as the reference, the cost as the first line">Invoice the landlord</button>
+        <button type="button" onClick={onInvoiceLandlord} disabled={!!landlordHeld} className={`${o.invoicePence != null && o.status !== "paid" ? primary : btn} disabled:cursor-not-allowed disabled:opacity-45`} title="Drafts our invoice to the landlord: their name, the job as the reference, the cost as the first line">{clear ? "Invoice the Landlord" : "Invoice the landlord"}</button>
         {o.invoicePence != null && !paying && <button type="button" onClick={() => setPaying(true)} className={btn}>Mark paid</button>}
       </div>
+      {landlordHeld && <p className="-mt-1 text-[11.5px] text-muted">{landlordHeld} Invoice the Landlord is our own invoice to them, not {o.payee === "agent" ? "your receipt" : "the contractor's"}.</p>}
       {paying && (
         <div className="rounded-xl border border-line/80 bg-card p-3">
           <div className="grid gap-1.5">

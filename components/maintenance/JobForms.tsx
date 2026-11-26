@@ -12,6 +12,7 @@ import { FloatCard, FloatChoice, FloatFoot } from "@/components/new-look/FloatSh
 import { DateEmail } from "@/components/maintenance/TenantJobEmail";
 import type { MailWords } from "@/components/maintenance/WorksOrderEmail";
 import ContractorJobEmail, { ContractorDateEmail } from "@/components/maintenance/ContractorJobEmail";
+import { useNewLook } from "@/lib/use-new-look";
 
 /**
  * The job's small forms, one per thing you can do to it: the quote, the
@@ -32,7 +33,7 @@ import ContractorJobEmail, { ContractorDateEmail } from "@/components/maintenanc
 
 export type FormId = "quote" | "request_quote" | "approve" | "assign" | "schedule" | "done" | "already_done" | "invoice" | "paid" | "cancel" | "reopen" | "note" | "edit" | "resend_order" | "hold_funds" | "hold_release";
 
-export const FORM_TITLE: Record<FormId, (o: WorksOrder) => string> = {
+export const FORM_TITLE: Record<FormId, (o: WorksOrder, clear?: boolean) => string> = {
   quote: (o) => (o.quotePence != null ? "Change the Quote" : "Log a Quote"),
   request_quote: () => "Ask for Quotes",
   approve: () => "Approve the Quote",
@@ -40,7 +41,8 @@ export const FORM_TITLE: Record<FormId, (o: WorksOrder) => string> = {
   schedule: (o) => (o.scheduledAt ? "Move the Date" : "Set the Date"),
   done: () => "Mark It Done",
   already_done: () => "It Was Already Done",
-  invoice: (o) => (o.invoicePence != null ? "Change the Invoice" : "Log the Invoice"),
+  /* "Add the Invoice" under the clearer money step (switch "moneystep", 26 Nov 2026). */
+  invoice: (o, clear) => (o.invoicePence != null ? "Change the Invoice" : clear ? (o.payee === "agent" ? "Add the Receipt" : "Add the Invoice") : "Log the Invoice"),
   paid: () => "Mark It Paid",
   cancel: () => "Cancel the Job",
   reopen: () => "Reopen the Job",
@@ -75,6 +77,7 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
   /** Float only: a line or a link for the footer box's left, when there is no error to show. */
   footLeft?: React.ReactNode;
 }) {
+  const clear = useNewLook("moneystep") === true;
   const F = look === "float";
   const field = F ? "nl-fs-input" : FIELD;
   const label = F ? "nl-fs-label mb-1 block" : LABEL;
@@ -128,7 +131,7 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
       const ok = await uploadFile(file, form === "invoice" ? "invoice" : "quote");
       if (!ok) return;
     }
-    await move(m, FORM_TITLE[form](o));
+    await move(m, FORM_TITLE[form](o, clear));
   }
 
   const fileBox = (what: string) => (
@@ -320,7 +323,7 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
         ) : (
           <FloatFoot left={problem ? <span className="nl-fs-err" role="alert">{problem}</span> : footLeft}>
             <button type="button" onClick={onBack} className="nl-btn nl-fs-ghost">Back</button>
-            <button type="button" disabled={busy} onClick={() => void save()} className={`nl-btn ${form === "cancel" ? "nl-btn--danger" : "nl-btn--primary"}`}>{busy ? (form === "resend_order" ? "Sending…" : "Saving…") : form === "cancel" ? "Cancel the job" : form === "resend_order" ? "Send it" : "Save"}</button>
+            <button type="button" disabled={busy} onClick={() => void save()} className={`nl-btn ${form === "cancel" ? "nl-btn--danger" : "nl-btn--primary"}`}>{busy ? (form === "resend_order" ? "Sending…" : "Saving…") : form === "cancel" ? "Cancel the job" : form === "resend_order" ? "Send it" : form === "invoice" && clear && o.invoicePence == null ? (o.payee === "agent" ? "Add the Receipt" : "Add the Invoice") : "Save"}</button>
           </FloatFoot>
         )}
       </>
@@ -333,7 +336,7 @@ export function JobForm({ o, form, contractors, move, busy, err, onBack, uploadF
       {(mine || err) && <p className="mt-3 text-[12px] text-accent-dark">{mine ?? err}</p>}
       {form !== "request_quote" && <div className="mt-4 flex justify-end gap-2">
         <button type="button" onClick={onBack} className={btn}>Back</button>
-        <button type="button" disabled={busy} onClick={() => void save()} className={primary}>{busy ? (form === "resend_order" ? "Sending…" : "Saving…") : form === "cancel" ? "Cancel the job" : form === "resend_order" ? "Send it" : "Save"}</button>
+        <button type="button" disabled={busy} onClick={() => void save()} className={primary}>{busy ? (form === "resend_order" ? "Sending…" : "Saving…") : form === "cancel" ? "Cancel the job" : form === "resend_order" ? "Send it" : form === "invoice" && clear && o.invoicePence == null ? (o.payee === "agent" ? "Add the Receipt" : "Add the Invoice") : "Save"}</button>
       </div>}
     </div>
   );

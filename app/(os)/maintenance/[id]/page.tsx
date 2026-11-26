@@ -115,6 +115,8 @@ export default function WorksOrderPage() {
   const landlordPaidSwitch = useNewLook("landlordpaid") === true;
   /* Hold the funds (Michael Healy, ticket c22a75e0): behind its own switch. */
   const holdFundsSwitch = useNewLook("holdfunds") === true;
+  /* The clearer invoice step (James, 26 Nov 2026): Invoice the Landlord waits for the contractor's invoice. */
+  const moneySwitch = useNewLook("moneystep") === true;
 
   const [job, setJob] = useState<Loaded<Job>>({ state: "loading" });
   const [book, setBook] = useState<Loaded<ManagedProperty[]>>({ state: "loading" });
@@ -326,6 +328,8 @@ export default function WorksOrderPage() {
   const isClosed = closed ? "The job is closed" : undefined;
   /* The landlord paid the contractor themselves (ticket b7a79378): nothing to invoice, pay or charge. */
   const byLandlord = o.payee === "landlord";
+  /* Under the clearer money step, one verb for the invoice everywhere (switch "moneystep"). */
+  const invoiceFirst = moneySwitch ? (o.payee === "agent" ? "Add your receipt first" : "Add the contractor's invoice first") : "Log the invoice first";
   const tiles: Tile[] = [
     { key: "quote", label: "Log a Quote", what: o.quotePence != null ? `Now ${pounds(o.quotePence)}` : "Their price, and the file", icon: "coin", off: isClosed, done: o.quotePence != null, run: () => openPop({ kind: "form", form: "quote" }) },
     { key: "approve", label: o.status === "approval" ? "Landlord Approved" : "Approve the Quote", what: o.status === "approval" ? "Waiting on their yes" : o.approvedAt ? `${o.approvedBy || "Approved"} · ${day(o.approvedAt)}` : "Their go-ahead, by phone or email", icon: "checklist", off: isClosed, done: !!o.approvedAt && o.status !== "approval", run: () => openPop({ kind: "form", form: "approve" }) },
@@ -340,8 +344,8 @@ export default function WorksOrderPage() {
     { key: "cert", label: "Add a Certificate", what: "Read and filed on the home", icon: "shield", off: o.status === "cancelled" ? "The job is cancelled" : undefined, run: () => openPop({ kind: "cert" }) },
     ...(o.kind === "repair" ? [{ key: "happy", label: "Is the Tenant Happy?", what: o.tenantHappy ? `${o.tenantHappy === "yes" ? "Happy" : "Not happy"}${o.tenantHappyAt ? ` · ${day(o.tenantHappyAt)}` : ""}` : "Their yes or no", icon: "message", off: !o.completedAt ? "Once it's done" : isClosed, done: !!o.tenantHappy, run: () => openPop({ kind: "stage", stage: "aftercare" }) }] : []),
     { key: "payee", label: "Who's Being Paid", what: o.payee === "agent" ? "The agent, who paid it" : o.payee === "contractor" ? o.contractorName || "The contractor" : byLandlord ? "The landlord paid directly" : look && landlordPaidSwitch ? "The contractor, you, or the landlord direct" : "The contractor, or you", icon: "wallet", off: isClosed, done: !!o.payee, run: () => openPop({ kind: "stage", stage: "payment" }) },
-    { key: "invoice", label: o.invoicePence != null ? "Change the Invoice" : "Log the Invoice", what: byLandlord ? "Not needed" : o.invoicePence != null ? `${pounds(o.invoicePence)}${o.invoiceRef ? ` · ${o.invoiceRef}` : ""}` : "Amount, number and file", icon: "doc", off: byLandlord ? "The landlord paid directly" : isClosed, done: o.invoicePence != null, run: () => openPop({ kind: "form", form: "invoice" }) },
-    { key: "landlord_says", label: "Landlord Authorises", what: o.landlordInvoiceAnswer ? "Answered" : o.landlordInvoiceAskedAt ? `Sent ${day(o.landlordInvoiceAskedAt)}` : "From the rent, or direct", icon: "home", off: byLandlord ? "The landlord paid directly" : o.invoicePence == null ? "Log the invoice first" : isClosed, done: !!o.landlordInvoiceAnswer, run: () => openPop({ kind: "landlord_says" }) },
+    { key: "invoice", label: o.invoicePence != null ? "Change the Invoice" : moneySwitch ? (o.payee === "agent" ? "Add the Receipt" : "Add the Invoice") : "Log the Invoice", what: byLandlord ? "Not needed" : o.invoicePence != null ? `${pounds(o.invoicePence)}${o.invoiceRef ? ` · ${o.invoiceRef}` : ""}` : moneySwitch ? "Total and file" : "Amount, number and file", icon: "doc", off: byLandlord ? "The landlord paid directly" : isClosed, done: o.invoicePence != null, run: () => openPop({ kind: "form", form: "invoice" }) },
+    { key: "landlord_says", label: "Landlord Authorises", what: o.landlordInvoiceAnswer ? "Answered" : o.landlordInvoiceAskedAt ? `Sent ${day(o.landlordInvoiceAskedAt)}` : "From the rent, or direct", icon: "home", off: byLandlord ? "The landlord paid directly" : o.invoicePence == null ? invoiceFirst : isClosed, done: !!o.landlordInvoiceAnswer, run: () => openPop({ kind: "landlord_says" }) },
     /* Ask accounts to keep the rent back for the contractor (Michael Healy, ticket c22a75e0). */
     ...(holdFundsSwitch ? [{
       key: "hold",
@@ -352,18 +356,18 @@ export default function WorksOrderPage() {
       done: !!o.holdAt,
       run: () => openPop({ kind: "form", form: o.holdAt ? "hold_release" : "hold_funds" }),
     }] : []),
-    { key: "raise", label: "Invoice the Landlord", what: byLandlord ? "Not needed" : "Draft our invoice to them", icon: "file-contract", off: o.status === "cancelled" ? "The job is cancelled" : byLandlord ? "The landlord paid directly" : undefined, run: () => void invoiceLandlord() },
+    { key: "raise", label: "Invoice the Landlord", what: byLandlord ? "Not needed" : "Draft our invoice to them", icon: "file-contract", off: o.status === "cancelled" ? "The job is cancelled" : byLandlord ? "The landlord paid directly" : moneySwitch && o.invoicePence == null ? (o.invoiceWaitPence != null ? "Check the contractor's invoice first" : o.payee === "agent" ? "Add your receipt first" : "Add the contractor's invoice first") : undefined, run: () => void invoiceLandlord() },
     /* The office says it's keyed on PayProp (James, 21 Oct 2026). Beside Mark paid, for them only. */
     ...(canPayrun ? [{
       key: "payrun",
       label: payrunAt ? "Take off the Payment Run" : PAYRUN_LABEL,
       what: payrunAt ? `On it since ${day(payrunAt)}` : "Keyed on PayProp",
       icon: "bank",
-      off: !awaitingPay(o) ? (o.invoicePence == null ? "Log the invoice first" : o.status === "paid" ? "Already paid" : "Mark it done first") : undefined,
+      off: !awaitingPay(o) ? (o.invoicePence == null ? invoiceFirst : o.status === "paid" ? "Already paid" : "Mark it done first") : undefined,
       done: !!payrunAt,
       run: () => void move({ action: payrunAt ? "payrun_undo" : "payrun" } as Move, PAYRUN_LABEL),
     }] : []),
-    { key: "paid", label: "Mark It Paid", what: byLandlord ? "Not needed" : o.paidAt ? `Paid ${day(o.paidAt)}` : "How it was settled", icon: "coin", off: byLandlord ? "The landlord paid directly" : o.status === "paid" ? "Already paid" : o.status === "cancelled" ? "The job is cancelled" : o.invoicePence == null ? "Log the invoice first" : undefined, done: o.status === "paid", run: () => openPop({ kind: "form", form: "paid" }) },
+    { key: "paid", label: "Mark It Paid", what: byLandlord ? "Not needed" : o.paidAt ? `Paid ${day(o.paidAt)}` : "How it was settled", icon: "coin", off: byLandlord ? "The landlord paid directly" : o.status === "paid" ? "Already paid" : o.status === "cancelled" ? "The job is cancelled" : o.invoicePence == null ? invoiceFirst : undefined, done: o.status === "paid", run: () => openPop({ kind: "form", form: "paid" }) },
     { key: "message", label: "Message the Landlord or Tenants", what: "One email, a copy each, noted on the job", icon: "mail", run: () => setMessaging(true) },
     { key: "note", label: "Add a Note", what: "A call, an email, a query", icon: "note", run: () => openPop({ kind: "form", form: "note" }) },
     { key: "file", label: "Add a File or Photo", what: "On the job and the home", icon: "camera", off: busy ? "Uploading…" : undefined, run: () => fileRef.current?.click() },

@@ -13,6 +13,7 @@ import { readInvoiceFile, readLine } from "@/components/maintenance/read-invoice
 import FloatSheet, { FloatCard, FloatCardHead, FloatChoice, FloatFoot } from "@/components/new-look/FloatSheet";
 import { digits, maskedAccount, readBank, sortCodeWords } from "@/lib/bank";
 import { postcodeIn } from "@/lib/postcode";
+import { useNewLook } from "@/lib/use-new-look";
 
 /**
  * Their invoice, for work done without a job on the OS. It goes on as a
@@ -31,6 +32,8 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look, c
   /** Whether this person may edit the contractor, so may save changed bank details back to them. The server checks again. */
   canSaveBack?: boolean;
 }) {
+  /* One word with the job's money step (switch "moneystep", 26 Nov 2026). */
+  const clear = useNewLook("moneystep") === true;
   const [props, setProps] = useState<Property[] | null>(null);
   /* Said under the search when a list of homes could not be read. */
   const [homesNote, setHomesNote] = useState<string | null>(null);
@@ -268,7 +271,7 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look, c
         )}
         <FloatFoot left={err ? <span className="nl-fs-err" role="alert">{err}</span> : <span>Goes on the home as a finished job. Accounts are told.</span>}>
           <button type="button" onClick={onClose} className="nl-btn nl-fs-ghost">Cancel</button>
-          <button type="button" disabled={busy} onClick={() => void save()} className="nl-btn nl-btn--primary">{busy ? "Logging…" : "Log the invoice"}</button>
+          <button type="button" disabled={busy} onClick={() => void save()} className="nl-btn nl-btn--primary">{busy ? (clear ? "Adding…" : "Logging…") : clear ? "Add the Invoice" : "Log the invoice"}</button>
         </FloatFoot>
       </>
     );
@@ -316,7 +319,7 @@ export function LogInvoice({ contractor, onClose, onSaved, bare = false, look, c
       <div className="mt-4 flex justify-end gap-2">
         {bare && <button type="button" onClick={onClose} className="rounded-full border border-line/80 bg-white px-4 py-2 text-[12.5px] text-muted hover:text-ink">Cancel</button>}
         <button type="button" disabled={busy} onClick={() => void save()} className={`rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-page ${busy ? "opacity-50" : ""}`}>
-          {busy ? "Logging…" : "Log the invoice"}
+          {busy ? (clear ? "Adding…" : "Logging…") : clear ? "Add the Invoice" : "Log the invoice"}
         </button>
       </div>
     </>
