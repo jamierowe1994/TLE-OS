@@ -63,22 +63,27 @@ export async function POST(req: NextRequest) {
        Say whose password this box wants. */
     const refused = /username or password|not valid|invalid/i.test(out.error);
 
-    /* ONE SENTENCE, FOUR FAULTS (19 Oct 2026). REX answers "Username or
+    /* ONE SENTENCE, SEVERAL FAULTS (19 Oct 2026). REX answers "Username or
        password not valid" whether the password is wrong, the address is
-       unknown, the user is switched off, or - the one that cost Rovena Buci
-       and Edward Westwood a morning - the user has two-factor turned on.
-       Authentication/login has no step for a code, so those users are refused
-       whatever they type, and the old wording told them to check the password
-       they had just typed correctly.
-       So before blaming anybody's password: ask REX whether it knows this
-       address and whether that user is live. If it does and they are, the
-       password is the least likely explanation left, and the screen says so
-       instead of sending them round again. Only on the failure path, so it
-       costs a working sign-in nothing. */
+       unknown, or the user is switched off, so the refusal cannot say which.
+
+       NOT two-factor, which is worth writing down because it looked like the
+       answer for an hour: Rovena Buci and Edward Westwood both have to enter
+       an auth code, and so does James, whose password sign-in here succeeded
+       on the same morning theirs were refused. Having it on does not stop
+       Authentication/login.
+
+       What it was: neither of them knows their REX password. Their Mac fills
+       it on REX's own website, so it works there without ever being typed,
+       and what they typed here was a guess. So before blaming the password
+       outright, ask REX whether it knows this address and whether that user
+       is live; when it does, say where the real password is kept rather than
+       telling somebody to try harder to remember it. Only on the failure
+       path, so a working sign-in pays nothing for it. */
     const known = refused ? await agentByEmail(email).catch(() => null) : null;
 
     const error = known?.active
-      ? "REX knows this address and the account is live, so your password is probably not the problem. If REX asks you for a code from an app when you sign in on its own website, that is the reason: the OS cannot pass a code on, and James is sorting it with REX. Press \u201cCarry on and connect REX later\u201d for now - everything else works."
+      ? "REX knows this address and your account is live, so it is the password itself. If your browser or your Mac fills your REX password in for you on REX's own website, you will never have typed it, and this box needs it typed. On a Mac: System Settings, then Passwords, search for rex, reveal it and paste it here. If it is not saved there, press \u201cCarry on and connect REX later\u201d and ask James for a REX password reset."
       : refused
         ? "REX didn't accept that email and password. This box wants the ones you use to sign in to REX itself - your REX password, not the TLE OS one you just chose."
         : out.error;
