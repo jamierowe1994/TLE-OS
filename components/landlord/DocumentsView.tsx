@@ -6,6 +6,8 @@ import QrHandoff from "@/components/landlord/QrHandoff";
 import UploadDoc from "@/components/landlord/UploadDoc";
 import type { DocRow, DocsView } from "@/lib/landlord-documents-view";
 import type { LandlordView } from "@/lib/landlord-view";
+import DocumentsViewCalm from "@/components/landlord/DocumentsViewCalm";
+import { portalLookOn } from "@/lib/portal-look";
 
 /**
  * The Documents page (12 Sep 2026), in the home page's language: light,
@@ -24,7 +26,15 @@ const eyebrow = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-mu
 const SAGE_INK = "#56634a";
 const SAGE_WASH = "#f1f4ec";
 
-export default function DocumentsView({ view: v, docs: d, sample = false }: { view: LandlordView; docs: DocsView; sample?: boolean }) {
+type DocumentsViewProps = { view: LandlordView; docs: DocsView; sample?: boolean };
+
+/* The "portals" switch decides which page is drawn: on, the calm one (DocumentsViewCalm,
+   26 Nov 2026); off, this file's own, exactly as it was. */
+export default async function DocumentsView(props: DocumentsViewProps) {
+  return (await portalLookOn()) ? <DocumentsViewCalm {...props} /> : <ClassicDocumentsView {...props} />;
+}
+
+function ClassicDocumentsView({ view: v, docs: d, sample = false }: { view: LandlordView; docs: DocsView; sample?: boolean }) {
   const allIn = d.needed.length === 0;
   return (
     <div className="space-y-6">

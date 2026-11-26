@@ -14,6 +14,8 @@ import SignTile from "@/components/landlord/SignTile";
 import { fullJourney } from "@/lib/landlord-journey";
 import { isLet, type LandlordView } from "@/lib/landlord-view";
 import BeforeMoveIn from "@/components/landlord/BeforeMoveIn";
+import DashboardCalm from "@/components/landlord/DashboardCalm";
+import { portalLookOn } from "@/lib/portal-look";
 
 /**
  * The landlord dashboard, to James's mock of 11 Sep 2026: light, airy,
@@ -38,17 +40,21 @@ const eyebrow = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-mu
 const SAGE_INK = "#56634a";
 const SAGE_WASH = "#f1f4ec";
 
-export default function LandlordDashboard({
-  view: v,
-  upload,
-  managed,
-}: {
+type DashProps = {
   view: LandlordView;
   /** The upload control, from the page - the sample and the live home file to different places. */
   upload?: React.ReactNode;
   /** Properties we already look after, from the page. */
   managed?: React.ReactNode;
-}) {
+};
+
+/* The "portals" switch decides which home is drawn: on, the calm one
+   (DashboardCalm, 26 Nov 2026); off, this file's own, exactly as it was. */
+export default async function LandlordDashboard(props: DashProps) {
+  return (await portalLookOn()) ? <DashboardCalm {...props} /> : <ClassicDashboard {...props} />;
+}
+
+function ClassicDashboard({ view: v, upload, managed }: DashProps) {
   /* The one next step: signing, when there is a contract to sign, because
      nothing else moves until it is done; otherwise the first in the stage's
      order. The rest are quiet links under it. */

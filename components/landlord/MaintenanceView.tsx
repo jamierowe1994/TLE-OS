@@ -5,6 +5,8 @@ import AgentSheet from "@/components/landlord/AgentSheet";
 import ReportIssue from "@/components/landlord/ReportIssue";
 import type { MaintJob, MaintView, MaintVisit } from "@/lib/landlord-maintenance-view";
 import { isLet, type LandlordView } from "@/lib/landlord-view";
+import MaintenanceViewCalm from "@/components/landlord/MaintenanceViewCalm";
+import { portalLookOn } from "@/lib/portal-look";
 
 /**
  * The Maintenance page (12 Sep 2026), in the home page's language, and the
@@ -25,7 +27,15 @@ const SAGE_INK = "#56634a";
 const SAGE_WASH = "#f1f4ec";
 const SAGE = "#b3bea5";
 
-export default function MaintenanceView({ view: v, m, sample = false }: { view: LandlordView; m: MaintView; sample?: boolean }) {
+type MaintenanceViewProps = { view: LandlordView; m: MaintView; sample?: boolean };
+
+/* The "portals" switch decides which page is drawn: on, the calm one (MaintenanceViewCalm,
+   26 Nov 2026); off, this file's own, exactly as it was. */
+export default async function MaintenanceView(props: MaintenanceViewProps) {
+  return (await portalLookOn()) ? <MaintenanceViewCalm {...props} /> : <ClassicMaintenanceView {...props} />;
+}
+
+function ClassicMaintenanceView({ view: v, m, sample = false }: { view: LandlordView; m: MaintView; sample?: boolean }) {
   const first = v.agent?.name.split(/\s+/)[0] ?? "your agent";
   const upcoming = m.visits.filter((x) => x.state !== "done");
   /* Locked until there is a tenant to maintain for (James, 12 Sep 2026):

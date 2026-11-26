@@ -9,7 +9,7 @@ import DoodleIcon from "@/components/DoodleIcon";
  * the right row is lit, and keeps the demo inside the demo (with its
  * ?from=admin, so the preview bar survives the click).
  */
-export default function SideNav({ variant, letHere = false }: { variant: "side" | "pills"; letHere?: boolean }) {
+export default function SideNav({ variant, letHere = false }: { variant: "side" | "pills" | "top"; letHere?: boolean }) {
   const path = usePathname() ?? "/landlord";
   const params = useSearchParams();
   const base = path.startsWith("/landlord/demo") ? "/landlord/demo" : "/landlord";
@@ -54,6 +54,19 @@ export default function SideNav({ variant, letHere = false }: { variant: "side" 
   const demoStage = base.endsWith("/demo") ? params?.get("stage") : null;
   const isLet = demoStage ? demoStage === "let" || demoStage === "managed" : letHere;
   const phone = [home, isLet ? maintenance : journey, documents];
+
+  /* The calm look's top bar (app/landlord-calm.css): the five pages as plain words. */
+  if (variant === "top") {
+    return (
+      <nav className="llc-nav" aria-label="Your property file">
+        {items.map((n) => (
+          <Link key={n.label} href={n.href} aria-current={n.on ? "page" : undefined}>
+            {n.label}
+          </Link>
+        ))}
+      </nav>
+    );
+  }
 
   if (variant === "pills") {
     const pill = (n: (typeof items)[number], extra: string) => (
