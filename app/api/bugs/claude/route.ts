@@ -4,12 +4,13 @@ import { publicOrigin } from "@/lib/origin";
 import { publicError } from "@/lib/public-error";
 import { BotRefused, record } from "@/lib/bug-bot";
 import { q } from "@/lib/db";
-import { ClaudeRefused, claudeDoFrom, maySendToClaude, sendToClaude, ticketForClaude, ticketTokenOk } from "@/lib/claude-tickets";
+import { ClaudeRefused, claudeDoFrom, maySendToClaude, newTaskForClaude, sendToClaude, ticketForClaude, ticketTokenOk } from "@/lib/claude-tickets";
 
 /**
  * Send to Claude (lib/claude-tickets, 4 Nov 2026).
  *
- * POST { id }                     James presses Send to Claude on Tickets
+ * POST { id, say? }               James presses Send to Claude on Tickets, with what he wants done
+ * POST { task, path? }            New Task for Claude: James types one with no ticket behind it
  * GET  ?id=&t=<ticket token>      the routine's session reads the ticket
  * PUT  { id, t, state, note, pr, branch, reply, do }
  *                                 the session says how it went: fix_ready
@@ -28,11 +29,18 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   const { actor } = await whoIs(req);
   if (!actor || actor.role !== "owner" || !maySendToClaude(actor.email)) return new NextResponse(null, { status: 404 });
-  const b = (await req.json().catch(() => ({}))) as { id?: unknown };
+  /* 26 Nov 2026: `say` is what James typed as he sent it (his instructions,
+     kept on the ticket); `task` with no id is a New Task for Claude. */
+  const b = (await req.json().catch(() => ({}))) as { id?: unknown; say?: unknown; task?: unknown; path?: unknown };
   const id = typeof b.id === "string" ? b.id : "";
-  if (!id) return NextResponse.json({ ok: false, error: "Which ticket?" }, { status: 400 });
+  const sender = { id: actor.id, email: actor.email, name: actor.name || actor.email };
   try {
-    const out = await sendToClaude(id, actor.name || actor.email, publicOrigin(req));
+    if (!id && typeof b.task === "string") {
+      const out = await newTaskForClaude(b.task, typeof b.path === "string" ? b.path : "", sender, publicOrigin(req));
+      return NextResponse.json({ ok: true, ...out });
+    }
+    if (!id) return NextResponse.json({ ok: false, error: "Which ticket?" }, { status: 400 });
+    const out = await sendToClaude(id, sender.name, publicOrigin(req), { say: typeof b.say === "string" ? b.say : "", sender: { id: actor.id, email: actor.email } });
     return NextResponse.json({ ok: true, ...out });
   } catch (e) {
     const status = e instanceof ClaudeRefused ? 409 : 500;

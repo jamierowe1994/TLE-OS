@@ -491,6 +491,7 @@ const MACHINE_ROUTES = [
      without it); James's press is a POST the route checks for an owner. */
   "/api/bugs/claude",
   "/api/bugs/claude/shot", // its pictures of a fix, same ticket token
+  "/api/bugs/claude/look", // live read-only look-ups for that run, same ticket token
   "/api/landlord/property-answers/chase", // signed but questions unfinished: 2, 5, 9 days
   "/api/viewings/sweep",              // the viewings ledger, nightly
   "/api/rex/snapshot",                // REX down: take the copy before it goes (cron key)
