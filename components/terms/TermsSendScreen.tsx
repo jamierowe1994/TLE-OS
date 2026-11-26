@@ -6,6 +6,7 @@ import TermsPaper, { Blank, type PaperPerson } from "@/components/terms/TermsPap
 import { isScottish } from "@/lib/property-flags";
 import { signatureFromPhoto } from "@/lib/terms/signature-photo";
 import { edition, editionFor } from "@/lib/terms/catalogue";
+import { useRevisedEditions } from "@/lib/terms/use-revisions";
 import { guessService, NO_RLP, rlpIncludedIn, serviceOfTerms, servicesFor } from "@/lib/terms/services";
 import type { Country, LandlordDetails, TermsValues } from "@/lib/terms/types";
 import { regForLandlords, type HomeReg } from "@/lib/reg-numbers";
@@ -284,6 +285,10 @@ export default function TermsSendScreen({
      is a Scottish property based on postcode, then it's under Scottish law, so
      they shouldn't have to click between the two." No choice for the agent;
      a contract already made keeps its own. */
+  /* The wording as last saved in My Business > Contracts (James, 26 Nov 2026):
+     registered with the catalogue, and the screen draws again when it arrives,
+     so the paper below is what will be sent. Nothing saved: nothing changes. */
+  useRevisedEditions(signing?.version);
   const [chosen] = useState<Country | null>(() => (signing ? signing.country : null));
   const country: Country = chosen ?? (editions[byAddress] ? byAddress : byAddress === "scotland" ? "england" : "scotland");
 

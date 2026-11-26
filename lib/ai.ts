@@ -64,7 +64,8 @@ export type AiFeature =
   | "planning-reader"
   | "translate"
   | "automation-builder"
-  | "visit-report";
+  | "visit-report"
+  | "contract-editor";
 
 type Spec = {
   label: string;
@@ -114,6 +115,12 @@ export const AI_FEATURES: Record<AiFeature, Spec> = {
      a person checks every box beside the report before anything is saved.
      AI_MODEL_VISIT_REPORT switches it. */
   "visit-report": { label: "Visit report reader", key: "VISIT_REPORT", model: "claude-haiku-5-5", effort: "low" },
+  /* My Business > Contracts (26 Nov 2026): Susan asks for a change to the
+     Terms of Business in plain English and it drafts the wording, which she
+     ticks before anything is saved (lib/terms/contract-desk). Contract
+     wording, read whole, where a careless edit costs most: Opus, as the
+     advert writer. No head-to-head yet; AI_MODEL_CONTRACT_EDITOR switches it. */
+  "contract-editor": { label: "Contract editor", key: "CONTRACT_EDITOR", model: "claude-opus-5-5", effort: "medium", voice: "writer" },
 };
 
 const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];

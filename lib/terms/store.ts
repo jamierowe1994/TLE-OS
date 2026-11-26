@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import type { LandlordDetails, TermsValues } from "@/lib/terms/types";
+import { ensureRevisionFor, ensureRevisions } from "@/lib/terms/revisions";
 
 /**
  * os_terms: one row per Terms of Business sent from the OS (lib/terms).
@@ -140,9 +141,20 @@ export async function insertTerms(t: Omit<TermsRow, "createdAt" | "sentAt" | "co
   );
 }
 
+/**
+ * A contract's words are looked up by its version (lib/terms/catalogue). One
+ * sent on a saved version ("<edition>~r<n>", lib/terms/revisions) needs those
+ * loaded first, so every read here makes sure they are before it answers.
+ */
+async function ensureRevised(rows: Raw[]): Promise<void> {
+  const one = rows.find((r) => String(r.version).includes("~r"));
+  await (one ? ensureRevisionFor(String(one.version)) : ensureRevisions());
+}
+
 export async function getTerms(id: string): Promise<TermsRow | null> {
   if (!hasDb()) return null;
   const rows = await q<Raw>(`SELECT * FROM os_terms WHERE id = $1`, [id]);
+  if (rows[0]) await ensureRevisionFor(rows[0].version);
   return rows[0] ? shape(rows[0]) : null;
 }
 
@@ -151,6 +163,7 @@ export async function byToken(token: string): Promise<{ terms: TermsRow; party: 
   if (!hasDb() || !/^[\w-]{20,}$/.test(token)) return null;
   const rows = await q<Raw>(`SELECT * FROM os_terms WHERE parties @> $1::jsonb LIMIT 1`, [JSON.stringify([{ token }])]);
   if (!rows[0]) return null;
+  await ensureRevisionFor(rows[0].version);
   const terms = shape(rows[0]);
   const party = terms.parties.find((p) => p.token === token);
   return party ? { terms, party } : null;
@@ -167,6 +180,7 @@ export async function termsForHome(h: { listingId?: string | null; propertyId?: 
       ORDER BY created_at DESC LIMIT 20`,
     [h.listingId ?? null, h.propertyId ?? null, h.appraisalId ?? null]
   );
+  await ensureRevised(rows);
   return rows.map(shape);
 }
 
@@ -174,6 +188,7 @@ export async function termsForHome(h: { listingId?: string | null; propertyId?: 
 export async function termsForAgent(agentId: string, limit = 20): Promise<TermsRow[]> {
   if (!hasDb()) return [];
   const rows = await q<Raw>(`SELECT * FROM os_terms WHERE agent_id = $1 AND cancelled_at IS NULL ORDER BY created_at DESC LIMIT $2`, [agentId, limit]);
+  await ensureRevised(rows);
   return rows.map(shape);
 }
 

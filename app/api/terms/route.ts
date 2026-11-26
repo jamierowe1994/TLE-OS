@@ -7,6 +7,7 @@ import { createTerms, inPreview, TermsRefused } from "@/lib/terms/flow";
 import { termsForHome } from "@/lib/terms/store";
 import { forStaff } from "@/lib/terms/staff";
 import { editionFor } from "@/lib/terms/catalogue";
+import { ensureRevisions } from "@/lib/terms/revisions";
 import { homeRegistration } from "@/lib/terms/registration";
 import type { Country } from "@/lib/terms/types";
 import { lookFor } from "@/lib/new-look-store";
@@ -37,6 +38,7 @@ export async function GET(req: NextRequest) {
     homeRegistration(home).catch(() => null),
   ]);
   const origin = publicOrigin(req);
+  await ensureRevisions();
   return NextResponse.json(
     {
       ok: true,

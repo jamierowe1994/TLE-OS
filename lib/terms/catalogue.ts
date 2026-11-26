@@ -40,9 +40,44 @@ export const NEXT: Partial<Record<Country, string>> = {
   england: ENGLAND_NOV26.id,
 };
 
-export function editionFor(country: Country, next = false): TermsDoc | null {
-  const id = (next ? NEXT[country] : null) ?? CURRENT[country];
-  return id ? EDITIONS[id] ?? null : null;
+/**
+ * REVISIONS (James, 26 Nov 2026): the wording Susan has changed in My
+ * Business > Contracts. A revision is a whole contract with the id
+ * "<edition>~r<n>", kept in the database (lib/terms/revisions), and the
+ * newest one of an edition is what goes out in that edition's place. They are
+ * registered here so these look-ups stay plain functions: the server loads
+ * them before it reads a contract (lib/terms/revisions ensureRevisions) and
+ * the send screen asks for them (lib/terms/use-revisions).
+ *
+ * With none registered every answer is exactly what it was before.
+ */
+const REVISED = new Map<string, TermsDoc>();
+const LATEST = new Map<string, string>();
+
+/** `latest`: edition id -> the revision id that now goes out in its place. */
+export function registerRevisions(docs: TermsDoc[], latest: Record<string, string>, replace = false): void {
+  if (replace) {
+    REVISED.clear();
+    LATEST.clear();
+  }
+  for (const d of docs) REVISED.set(d.id, d);
+  for (const [base, id] of Object.entries(latest)) LATEST.set(base, id);
 }
 
-export const edition = (id: string): TermsDoc | null => EDITIONS[id] ?? null;
+/** "england-nov26~r3" -> "england-nov26". */
+export const baseEditionId = (id: string): string => id.split("~")[0];
+export const isRevision = (id: string): boolean => id.includes("~r");
+
+/** The edition agents send for a country today: the November wording where there is one. */
+export function sendingEditionId(country: Country): string | null {
+  return NEXT[country] ?? CURRENT[country] ?? null;
+}
+
+export function editionFor(country: Country, next = false): TermsDoc | null {
+  const id = (next ? NEXT[country] : null) ?? CURRENT[country];
+  if (!id) return null;
+  const revised = LATEST.get(id);
+  return (revised ? REVISED.get(revised) : null) ?? EDITIONS[id] ?? null;
+}
+
+export const edition = (id: string): TermsDoc | null => REVISED.get(id) ?? EDITIONS[id] ?? null;

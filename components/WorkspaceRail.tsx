@@ -50,7 +50,7 @@ import { fetchMe } from "@/lib/me";
 export type RailItem = {
   href: string; label: string; exact?: boolean; icon?: string; /** Other routes that light this entry - a page shown as its tab. */ also?: string[];
   /** Shown only while this switch is on for the person (lib/new-look): the Scottish rent review's desk tab, 20 Nov 2026. */
-  look?: "scotrent" | "recruitment";
+  look?: "scotrent" | "recruitment" | "contracts";
   /** Shown only to the people a named list gives it to (/api/auth/me): the deposit register on the compliance desk, 23 Nov 2026. */
   only?: "deposits";
 };
@@ -91,6 +91,7 @@ export default function WorkspaceRail({
   const look = useNewLook("nav") === true;
   const scotRent = useNewLook("scotrent") === true;
   const recruitment = useNewLook("recruitment") === true;
+  const contracts = useNewLook("contracts") === true;
   /* Held back until the answer is in, so the entry never shows for a beat to somebody it is not for. */
   const [deposits, setDeposits] = useState(false);
   const asksMe = groups.some((g) => g.items.some((t) => t.only));
@@ -106,7 +107,7 @@ export default function WorkspaceRail({
       gone = true;
     };
   }, [asksMe]);
-  const shown = (t: RailItem) => (!t.look || (t.look === "scotrent" && scotRent) || (t.look === "recruitment" && recruitment)) && (!t.only || (t.only === "deposits" && deposits));
+  const shown = (t: RailItem) => (!t.look || (t.look === "scotrent" && scotRent) || (t.look === "recruitment" && recruitment) || (t.look === "contracts" && contracts)) && (!t.only || (t.only === "deposits" && deposits));
   useEffect(() => {
     try {
       setCollapsed(window.localStorage.getItem(key) === "1");

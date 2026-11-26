@@ -1536,6 +1536,34 @@ ALTER TABLE os_terms ADD COLUMN IF NOT EXISTS replaces TEXT;
 -- the bare link to sign. lib/terms/flow agentSigned.
 ALTER TABLE os_terms ADD COLUMN IF NOT EXISTS with_pack BOOLEAN NOT NULL DEFAULT FALSE;
 
+-- The wording Susan has changed (James, 26 Nov 2026; lib/terms/revisions).
+-- One row per saved version of an edition: the whole contract's sections, who
+-- saved it and what changed. Never updated or deleted: a contract sent on
+-- "<edition>~r<n>" reads this row for as long as it exists.
+CREATE TABLE IF NOT EXISTS os_terms_revisions (
+  id          TEXT PRIMARY KEY,
+  edition     TEXT NOT NULL,
+  n           INTEGER NOT NULL,
+  country     TEXT NOT NULL,
+  sections    JSONB NOT NULL,
+  changes     JSONB NOT NULL DEFAULT '[]'::jsonb,
+  note        TEXT NOT NULL DEFAULT '',
+  created_by  TEXT NOT NULL DEFAULT '',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (edition, n)
+);
+-- The working copy for each country: what is being changed and which changes
+-- have been ticked. One row per country; gone once it is saved or discarded.
+CREATE TABLE IF NOT EXISTS os_terms_drafts (
+  country     TEXT PRIMARY KEY,
+  from_id     TEXT NOT NULL,
+  sections    JSONB NOT NULL,
+  ticks       JSONB NOT NULL DEFAULT '[]'::jsonb,
+  chat        JSONB NOT NULL DEFAULT '[]'::jsonb,
+  updated_by  TEXT NOT NULL DEFAULT '',
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS os_signed_documents (
   submitter_id   BIGINT PRIMARY KEY,
   submission_id  BIGINT,

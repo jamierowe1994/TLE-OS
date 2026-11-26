@@ -18,6 +18,7 @@ import {
   submitterState,
 } from "@/lib/docuseal";
 import { edition, editionFor } from "@/lib/terms/catalogue";
+import { ensureRevisions } from "@/lib/terms/revisions";
 import { servicesFor } from "@/lib/terms/services";
 import { agentPhone } from "@/lib/agent-phone";
 import { getAppraisal, markTermsSent } from "@/lib/appraisal-store";
@@ -182,6 +183,9 @@ function fromAnswers(doc: TermsDoc, answers: Answers): Partial<LandlordDetails> 
 
 /** Make the contract and the agent's signing link. Nobody is emailed yet. */
 export async function createTerms(n: NewTerms): Promise<{ terms: TermsRow; agentEmbedSrc: string }> {
+  /* The wording as last saved in My Business > Contracts, read fresh: what the
+     agent sends now is what was saved, never a copy from a minute ago. */
+  await ensureRevisions(true);
   const doc = editionFor(n.country, Boolean(n.next));
   if (!doc) throw new TermsRefused("There are no terms for that country yet.");
   const people = n.people

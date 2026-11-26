@@ -24,6 +24,10 @@ export const BUSINESS_TABS = [
   /* James, 26 Nov 2026: the hiring figures, counted from Teamtailor. Behind its
      own switch (lib/new-look "recruitment"): off, the rail does not list it. */
   { key: "recruitment", label: "Recruitment", icon: "target", blurb: "Hiring, counted from Teamtailor: open vacancies, applications, where they came from, offers, hires and time to hire." },
+  /* James, 26 Nov 2026: the Terms of Business, changed here with an assistant.
+     Behind its own switch (lib/new-look "contracts"), and only for the people
+     named on the tab (lib/terms/contract-desk). */
+  { key: "contracts", label: "Contracts", icon: "file-contract", blurb: "The Terms of Business agents send, for England and for Scotland. Change the wording, tick each change, and save it for the agents." },
   { key: "portfolio", label: "Portfolio", icon: "pack/building", blurb: "The book: managed, let only and rent collection, England, Wales and Scotland, with Margo's Glasgow portfolio apart." },
   /* Susan Liles, 3 Nov 2026: "the Property management overview that we had
      before ... every property management function and overview". Every
@@ -43,16 +47,16 @@ export const PRESENT_KEYS: BusinessTabKey[] = ["overview", "paid-leads", "income
 export const BUSINESS_RAIL: RailGroup[] = [
   {
     title: null,
-    items: BUSINESS_TABS.slice(0, 9).map((t) => ({ href: `/company-figures/${t.key}`, label: t.label, icon: t.icon, ...(t.key === "recruitment" ? { look: "recruitment" as const } : {}) })),
+    items: BUSINESS_TABS.slice(0, 10).map((t) => ({ href: `/company-figures/${t.key}`, label: t.label, icon: t.icon, ...(t.key === "recruitment" ? { look: "recruitment" as const } : t.key === "contracts" ? { look: "contracts" as const } : {}) })),
   },
   {
     title: "The book",
     rule: true,
-    items: BUSINESS_TABS.slice(9, 13).map((t) => ({ href: `/company-figures/${t.key}`, label: t.label, icon: t.icon })),
+    items: BUSINESS_TABS.slice(10, 14).map((t) => ({ href: `/company-figures/${t.key}`, label: t.label, icon: t.icon })),
   },
   {
     title: null,
     rule: true,
-    items: BUSINESS_TABS.slice(13).map((t) => ({ href: `/company-figures/${t.key}`, label: t.label, icon: t.icon })),
+    items: BUSINESS_TABS.slice(14).map((t) => ({ href: `/company-figures/${t.key}`, label: t.label, icon: t.icon })),
   },
 ];

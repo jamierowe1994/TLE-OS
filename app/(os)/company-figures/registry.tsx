@@ -11,6 +11,7 @@ import Forecast from "./tabs/forecast";
 import Agents from "./tabs/agents";
 import LandlordDecks from "./tabs/landlord-decks";
 import Recruitment from "./tabs/recruitment";
+import Contracts from "./tabs/contracts";
 import Portfolio from "./tabs/portfolio";
 import PropertyManagement from "./tabs/property-management";
 import Arrears from "./tabs/arrears";
@@ -30,6 +31,7 @@ export const TAB_COMPONENTS: Record<BusinessTabKey, TabComponent> = {
   agents: Agents,
   "landlord-decks": LandlordDecks,
   recruitment: Recruitment,
+  contracts: Contracts,
   portfolio: Portfolio,
   "property-management": PropertyManagement,
   arrears: Arrears,
