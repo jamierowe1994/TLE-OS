@@ -152,18 +152,20 @@ html[data-portal-look="calm"] body { background: #f8f7f4; }
 .llh-agent-c a:hover { color: var(--ink); }
 
 .llh-hero { display: grid; grid-template-columns: minmax(0, 1.42fr) minmax(0, 1fr); gap: 20px; }
-.llh-home { position: relative; min-height: clamp(380px, 34vw, 470px); overflow: hidden; border-radius: var(--lc-r); background: var(--lc-linen); display: flex; align-items: flex-end; isolation: isolate; }
-.llh-home .llh-home-ph { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; }
+.llh-home { position: relative; min-height: clamp(380px, 34vw, 470px); overflow: hidden; border-radius: var(--lc-r); background: var(--lc-linen); display: flex; align-items: flex-end; }
+.llh-home .llh-home-ph { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .llh-home img.llh-home-ph { filter: var(--lc-grade); }
-.llh-home[data-photo="yes"]::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(to top, rgba(58, 43, 40, .9) 0%, rgba(58, 43, 40, .66) 38%, rgba(58, 43, 40, .18) 66%, rgba(58, 43, 40, 0) 84%); }
+/* The shade under the words is the words' own background, and nothing here makes a stacking context:
+   the phone's property sheet is drawn from inside this card and has to rise over the whole page. */
+.llh-home[data-photo="yes"] .llh-home-tx { padding-top: clamp(90px, 12vw, 150px); background: linear-gradient(to top, rgba(58, 43, 40, .9) 0%, rgba(58, 43, 40, .66) 45%, rgba(58, 43, 40, .2) 78%, rgba(58, 43, 40, 0) 100%); }
 /* No photograph yet: the drawn tile is a band across the top and the words sit under it, so the drawing never runs behind the address. */
 .llh-home[data-photo="no"] { flex-direction: column; align-items: stretch; justify-content: flex-end; }
 .llh-home[data-photo="no"] .llh-home-ph { position: relative; inset: auto; z-index: 0; flex: 1 1 150px; min-height: 150px; height: auto; }
 .llh-nophoto { position: absolute; left: 16px; top: 16px; z-index: 1; padding: 5px 10px; border-radius: 6px; background: rgba(255, 255, 255, .82); font-size: 11.5px; font-weight: 600; color: var(--muted); }
-.llh-home-tx { width: 100%; padding: clamp(22px, 2.6vw, 34px); color: var(--ink); }
+.llh-home-tx { position: relative; width: 100%; padding: clamp(22px, 2.6vw, 34px); color: var(--ink); }
 .llh-home[data-photo="yes"] .llh-home-tx { color: var(--lc-linen); }
 .llh-home[data-photo="yes"] .llh-label { color: rgba(245, 239, 230, .78); }
-[data-portal-look="calm"] .llh-home h2 { margin: 8px 0 0; font-size: clamp(28px, 3vw, 42px); line-height: 1; color: inherit; }
+[data-portal-look="calm"] .llh-home-tx > h2 { margin: 8px 0 0; font-size: clamp(28px, 3vw, 42px); line-height: 1; color: inherit; }
 .llh-facts { margin: 10px 0 0; font-size: 14px; opacity: .88; }
 .llh-home-foot { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 14px 36px; margin-top: 22px; padding-top: 18px; border-top: 1px solid currentColor; border-top-color: color-mix(in srgb, currentColor 28%, transparent); }
 .llh-rent, .llh-valued { margin: 0; display: grid; gap: 4px; }
@@ -179,16 +181,16 @@ html[data-portal-look="calm"] body { background: #f8f7f4; }
 
 .llh-next { position: relative; display: flex; flex-direction: column; border-radius: var(--lc-r); padding: clamp(24px, 2.8vw, 38px); background: var(--lc-olive); color: var(--lc-linen); }
 .llh-next .llh-label { color: rgba(245, 239, 230, .7); }
-[data-portal-look="calm"] .llh-next h2 { margin: 18px 0 0; font-size: clamp(30px, 3vw, 42px); line-height: 1; color: var(--lc-linen); }
+[data-portal-look="calm"] .llh-next h2:not([class*="fixed"] *) { margin: 18px 0 0; font-size: clamp(30px, 3vw, 42px); line-height: 1; color: var(--lc-linen); }
 .llh-next-sub { margin: 14px 0 0; max-width: 34ch; font-size: 15.5px; line-height: 1.5; color: rgba(245, 239, 230, .86); }
 .llh-next-go { margin-top: 26px; }
 /* The one button: Linen on the olive, so it is the brightest thing on the page. */
-[data-portal-look="calm"] .llh-next :is(a, button)[class*="bg-accent-dark"] { background: var(--lc-linen); color: var(--ink); border-radius: var(--lc-rs); padding: 14px 22px; font-size: 14.5px; font-weight: 600; }
-[data-portal-look="calm"] .llh-next :is(a, button)[class*="bg-accent-dark"]:hover { background: #fff; opacity: 1; }
+[data-portal-look="calm"] .llh-next :is(a, button)[class*="bg-accent-dark"]:not([class*="fixed"] *) { background: var(--lc-linen); color: var(--ink); border-radius: var(--lc-rs); padding: 14px 22px; font-size: 14.5px; font-weight: 600; }
+[data-portal-look="calm"] .llh-next :is(a, button)[class*="bg-accent-dark"]:not([class*="fixed"] *):hover { background: #fff; opacity: 1; }
 .llh-also { margin-top: auto; padding-top: 26px; }
 .llh-also-links { margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 14px; }
-[data-portal-look="calm"] .llh-also-links :is(a, button) { color: var(--lc-linen); font-weight: 500; text-decoration: underline; text-decoration-color: rgba(245, 239, 230, .4); text-underline-offset: 5px; background: none; }
-[data-portal-look="calm"] .llh-also-links :is(a, button):hover { text-decoration-color: var(--lc-linen); }
+[data-portal-look="calm"] .llh-also-links :is(a, button):not([class*="fixed"] *) { color: var(--lc-linen); font-weight: 500; text-decoration: underline; text-decoration-color: rgba(245, 239, 230, .4); text-underline-offset: 5px; background: none; }
+[data-portal-look="calm"] .llh-also-links :is(a, button):not([class*="fixed"] *):hover { text-decoration-color: var(--lc-linen); }
 /* The phone's "See more actions" inside the olive. */
 [data-portal-look="calm"] .llh-next [class*="sm:hidden"] > button { color: rgba(245, 239, 230, .86); }
 [data-portal-look="calm"] .llh-next [class*="sm:hidden"] ul { background: rgba(245, 239, 230, .96); color: var(--ink); border-radius: var(--lc-rs); }
@@ -285,11 +287,15 @@ html[data-portal-look="calm"] body { background: #f8f7f4; }
   [data-portal-look="calm"] .llc-main h1 { font-size: 34px; }
   .llh-hero { gap: 14px; }
   .llh-home { min-height: 0; aspect-ratio: 4 / 3.4; }
-  [data-portal-look="calm"] .llh-home h2 { font-size: 27px; }
+  /* No photograph yet, on a phone: a fixed band for the drawing, and its caption as a plain line under it, so the two never meet. */
+  .llh-home[data-photo="no"] { aspect-ratio: auto; }
+  .llh-home[data-photo="no"] .llh-home-ph { flex: 0 0 150px; min-height: 0; }
+  .llh-nophoto { position: static; align-self: flex-start; margin: 16px 0 -8px 22px; padding: 0; background: none; }
+  [data-portal-look="calm"] .llh-home-tx > h2 { font-size: 27px; }
   /* "View property details" (PropertySheet's own button) sits on the photograph. */
   [data-portal-look="calm"] .llh-home-tx [class*="sm:hidden"] > button { margin-top: 16px; border-color: color-mix(in srgb, currentColor 45%, transparent); color: inherit; background: transparent; }
   .llh-next { padding: 22px; }
-  [data-portal-look="calm"] .llh-next h2 { margin-top: 12px; font-size: 27px; }
+  [data-portal-look="calm"] .llh-next h2:not([class*="fixed"] *) { margin-top: 12px; font-size: 27px; }
   .llh-next-sub { margin-top: 10px; font-size: 14.5px; }
   .llh-next-go { margin-top: 18px; }
   .llh-also { display: none; }
@@ -431,7 +437,7 @@ html[data-portal-look="calm"] body { background: #f8f7f4; }
 .llp-stack { display: grid; gap: 34px; min-width: 0; }
 .llp-who-top { display: flex; align-items: center; gap: 16px; margin-top: 18px; }
 .llp-who-top > :is(img, span) { flex: none; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; object-fit: cover; background: rgba(245, 239, 230, .16); color: var(--lc-linen); font-size: 22px; font-weight: 600; }
-[data-portal-look="calm"] .llp-who h2 { margin: 0; font-size: 28px; }
+[data-portal-look="calm"] .llp-who .llp-who-top h2 { margin: 0; font-size: 28px; color: var(--lc-linen); }
 .llp-who-top p { margin: 4px 0 0; font-size: 13.5px; color: rgba(245, 239, 230, .8); }
 .llp-contact { list-style: none; margin: 24px 0 0; padding: 0; }
 .llp-contact li { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 12px; align-items: baseline; padding: 12px 0; border-top: 1px solid rgba(245, 239, 230, .2); font-size: 14.5px; }
@@ -466,4 +472,15 @@ html[data-portal-look="calm"] body { background: #f8f7f4; }
   /* A job's cost and state drop under its words, so the words keep the full width. */
   .llp-jobs .llh-grow { flex-basis: calc(100% - 38px); }
   .llp-jobs li > .llh-grow + * { margin-left: 38px; }
+}
+
+/* A pop-up or sheet opened from inside the photograph or the olive panel is its own thing:
+   its words go back to Chestnut on its own white, whatever it was opened from. */
+[data-portal-look="calm"] :is(.llh-next, .llh-home) [class*="fixed"] { color: var(--ink); text-align: left; }
+[data-portal-look="calm"] :is(.llh-next, .llh-home) [class*="fixed"] .llh-label { color: var(--muted); }
+
+/* "View property details" on the photograph (a phone): a fine Linen outline, not the page's Chestnut one. */
+@media (max-width: 639px) {
+  [data-portal-look="calm"] .llc-main .llh-home[data-photo="yes"] .llh-home-tx [class*="sm:hidden"] > button[class*="rounded-full"] { border-color: rgba(245, 239, 230, .5); color: var(--lc-linen); }
+  [data-portal-look="calm"] .llc-main .llh-home[data-photo="yes"] .llh-home-tx [class*="sm:hidden"] > button[class*="rounded-full"]:hover { background: rgba(245, 239, 230, .14); border-color: var(--lc-linen); color: var(--lc-linen); }
 }
