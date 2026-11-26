@@ -89,9 +89,8 @@ html[data-xmas="on"] main[data-os-content] { position: relative; }
    ... both a lighter theme and a darker theme, both in the Christmas
    colours ... twinkling lights in the dark mode."
    Only with html[data-xmas="on"], which the person's own tile sets, so
-   nobody else's screen changes. The light version: a deep pine sidebar, a
-   warm cream page (white snow shows on it), pine buttons, berry accents. The
-   dark version: a midnight-pine page, gold buttons, and fairy lights lit
+   nobody else's screen changes. The light version: a deep pine sidebar, the
+   page left white, pine buttons, berry accents. The dark version: a midnight-pine page, gold buttons, and fairy lights lit
    along the garland. `:root:root` outranks the sidebar's own colour choices
    (linen, sage, clay) without !important. */
 
@@ -99,7 +98,6 @@ html[data-xmas="on"] main[data-os-content] { position: relative; }
 :root:root[data-xmas="on"] [data-nav-look="new"] {
   --nv-bg: #1d3b2c; --nv-line: rgba(246, 239, 226, 0.14); --nv-ink: #f6efe2; --nv-muted: #c5d3c6; --nv-faint: #9db3a2;
   --nv-hover: rgba(246, 239, 226, 0.08); --nv-on: #2b5540; --nv-count: #ffb4ab; --nv-avatar: #2b5540; --nv-sel-edge: #e5484d;
-  --nv-page: #f3ebde;
 }
 :root:root[data-xmas="on"][data-theme="dark"] [data-nav-look="new"] {
   --nv-bg: #0d1c15; --nv-line: rgba(246, 239, 226, 0.1); --nv-on: #1b3527; --nv-avatar: #1b3527;
@@ -108,10 +106,11 @@ html[data-xmas="on"] main[data-os-content] { position: relative; }
 /* The selected row keeps its marker in the dark version too. */
 :root:root[data-xmas="on"] [data-nav-look="new"] .nl-nav-item.is-on svg { color: #ff8f88; }
 
-/* Pages in the new look, light version: cream, with paler cream boxes. */
+/* Pages, light version: the page stays white, as it was. A cream page went
+   the same day (James: "it looks a bit weird ... keep the background white,
+   or whatever colour it was before"). Only the buttons and accents change:
+   pine buttons, berry accents. */
 :root[data-xmas="on"]:not([data-theme="dark"]) [data-look="new"] {
-  --page: #f3ebde; --card: #fbf6ec; --panel: #f8f1e4; --box: #ece1cf;
-  --line: #e0d4bf; --line-strong: #cbbba0;
   --primary: #244a36; --on-primary: #ffffff;
   --accent: #a3262f; --accent-dark: #a3262f; --accent-soft: #f4e2de;
   --sage-deep: #2c5a40; --sage-ink: #2c5a40; --sage-soft: #e3ecdc;

@@ -71,7 +71,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
   "/dashboard": {
     purpose: "The morning view - what is happening across your lettings business today.",
     does: [
-      "The Christmas look, when the office has switched it on (December to Twelfth Night): Steve wears a Santa hat, and a tile above Help in the sidebar says Try the new Christmas look. Pressing it gives that person Christmas colours (a deep green sidebar and a cream page, or a midnight page with twinkling lights in dark mode), snow and a pine garland on the dashboard, holly by the TLE OS name and fairy lights along the sidebar, and it follows them to any computer. The same tile (Christmas look on) turns it off again. Nobody else is changed by it.",
+      "The Christmas look, when the office has switched it on (December to Twelfth Night): Steve wears a Santa hat, and a tile above Help in the sidebar says Try the new Christmas look. Pressing it gives that person Christmas colours (a deep green sidebar, and in dark mode a midnight page with twinkling lights), snow and a pine garland on the dashboard, holly by the TLE OS name and fairy lights along the sidebar, and it follows them to any computer. The same tile (Christmas look on) turns it off again. Nobody else is changed by it.",
       "Read your own bento board of tiles.",
       "Press Customise to add, remove or resize tiles from the tray, then Done.",
       /* Gurdeep Singh, 14 Oct 2026: "Can you check my emails this morning". */

@@ -9,7 +9,8 @@ import { useChristmas, useStill } from "@/lib/christmas";
  * code, no pictures: Steve's hat, the holly by the name, the fairy lights
  * along the sidebar, the snowy garland and the snow on the dashboard, and the tile
  * that turns the look on and off. The colours that go with it (a deep pine
- * sidebar, a cream or midnight page) are in app/new-look/christmas.css.
+ * sidebar; the page stays white in light mode and turns midnight in dark)
+ * are in app/new-look/christmas.css.
  */
 
 const BERRY = "#9e2f35";
@@ -236,11 +237,15 @@ function seeded(seed: number) {
 function Garland() {
   const box = useRef<HTMLDivElement>(null);
   const px = useWidth(box);
-  /* Drawn a third larger than its own units, so it reads as a real garland
-     and still clears the date line under it. */
-  const k = 1.35;
+  /* It scales with the page (James, 26 Nov 2026: "it needs to scale with the
+     page in terms of size"): always four scallops, drawn larger on a wide
+     page and smaller on a narrow one, so it looks the same at every width.
+     1.35 at a 1,175px page is the size he approved; the limits keep it from
+     turning into a thread on a small window or reaching the date line on a
+     very wide one. */
+  const k = Math.min(1.7, Math.max(0.8, (1.35 * px) / 1175));
   const w = px / k;
-  const swags = Math.max(2, Math.round(px / 300));
+  const swags = 4;
   const sag = 20;
   const top = 12;
   const H = top + sag + 34;
@@ -467,7 +472,8 @@ function Snow() {
         ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
         /* On a white page a white flake vanishes: a soft grey-blue edge keeps it visible without looking dirty. */
         ctx.fillStyle = `rgba(255,255,255,${f.o})`;
-        ctx.shadowColor = isDark ? "rgba(255,255,255,0.35)" : "rgba(96,78,52,0.6)";
+        /* On the white page a white flake needs an edge to be seen at all: a soft grey-blue one. */
+        ctx.shadowColor = isDark ? "rgba(255,255,255,0.35)" : "rgba(70,92,116,0.8)";
         ctx.shadowBlur = isDark ? 4 : 3;
         ctx.fill();
       }
