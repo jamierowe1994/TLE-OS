@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { SteveMood } from "@/components/SteveFace";
 import { steveSeason, type SteveSeason } from "@/lib/steve-season";
+import { useChristmasSeason } from "@/lib/christmas";
+import { SantaHat } from "@/components/christmas/Decor";
 
 /**
  * Steve as an orb (25 Oct 2026, James: "a bit of a ball ... almost like a
@@ -99,6 +101,8 @@ export default function SteveOrb({
   const [season, setSeason] = useState<SteveSeason>(null);
   useEffect(() => setSeason(steveSeason()), []);
   const halloween = season === "halloween";
+  /* His Santa hat: the "christmas" switch, 1 Nov to 6 Jan (lib/christmas, 26 Nov 2026). */
+  const christmas = useChristmasSeason() && !halloween;
 
   /* The swirl's speed follows the mood (and the pointer), eased. */
   useEffect(() => {
@@ -173,7 +177,7 @@ export default function SteveOrb({
   return (
     <span
       ref={ref}
-      className={`sorb sorb--${mood}${hover ? " is-hover" : ""}${track ? " is-tracking" : ""}${halloween ? " is-halloween" : ""} ${className}`}
+      className={`sorb sorb--${mood}${hover ? " is-hover" : ""}${track ? " is-tracking" : ""}${halloween ? " is-halloween" : ""}${christmas ? " is-christmas" : ""} ${className}`}
       style={{ width: size, height: size, ["--s" as string]: `${size}px`, ...(swell ? { transform: `scale(${swell})`, transition: "transform 90ms linear" } : {}) }}
       role="img"
       aria-label={label}
@@ -189,6 +193,7 @@ export default function SteveOrb({
         <span className="sorb-o o5"><i /></span>
         <span className="sorb-grain" />
       </span>
+      {christmas && size >= 22 && <SantaHat />}
       {size >= 22 && (
         <span className="sorb-eyes" aria-hidden>
           <span ref={gaze} className="sorb-gaze">

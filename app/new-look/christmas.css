@@ -1,0 +1,149 @@
+/* ── The Christmas look (lib/christmas, components/christmas/Decor, 26 Nov 2026) ──
+   Steve's hat shows whenever the "christmas" switch is on in the season; the
+   rest only with html[data-xmas="on"], which the person's own tile sets.
+   Nothing here sits over a control: the snow and the garland take no pointer. */
+
+/* Steve's hat: on top of his head, a little forward, tipped to his left. */
+.sorb.is-christmas { overflow: visible; }
+.sorb .xmas-hat {
+  position: absolute; z-index: 3; pointer-events: none;
+  width: calc(var(--s) * 0.9); height: auto;
+  left: calc(var(--s) * 0.02); top: calc(var(--s) * -0.42);
+  rotate: -14deg; transform-origin: 30% 90%;
+  filter: drop-shadow(0 calc(var(--s) * 0.03) calc(var(--s) * 0.03) rgba(40, 20, 15, 0.28));
+}
+/* A tiny sway when he's pleased or poked; still for anyone who asked for less motion. */
+.sorb.is-christmas.is-hover .xmas-hat { animation: xmas-hat-tip 900ms ease-out; }
+@keyframes xmas-hat-tip { 0% { rotate: -14deg; } 35% { rotate: -6deg; } 70% { rotate: -17deg; } 100% { rotate: -14deg; } }
+
+/* The tile above Help. */
+.xmas-tile {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  min-height: 34px; padding: 6px 10px; margin-bottom: 4px;
+  border: 1px solid rgba(158, 47, 53, 0.28); border-radius: 8px;
+  background: linear-gradient(135deg, rgba(158, 47, 53, 0.07), rgba(47, 74, 58, 0.06));
+  color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.xmas-tile:hover { border-color: rgba(158, 47, 53, 0.5); background: linear-gradient(135deg, rgba(158, 47, 53, 0.11), rgba(47, 74, 58, 0.09)); }
+.xmas-tile:focus-visible { outline: 2px solid #9e2f35; outline-offset: 2px; }
+.xmas-tile.is-new { border-radius: 0; }
+.xmas-tile.is-tight { justify-content: center; padding: 6px; width: 34px; margin-inline: auto; }
+.xmas-tile-icon { display: inline-flex; color: #9e2f35; flex-shrink: 0; }
+.xmas-tile.is-on .xmas-tile-icon { color: #2f4a3a; }
+.xmas-tile-words { flex: 1; min-width: 0; line-height: 1.25; }
+.xmas-tile-switch {
+  position: relative; flex-shrink: 0; width: 26px; height: 15px; border-radius: 999px;
+  background: rgba(60, 50, 40, 0.18); transition: background 160ms ease;
+}
+.xmas-tile-switch i {
+  position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); transition: transform 180ms ease;
+}
+.xmas-tile.is-on .xmas-tile-switch { background: #2f4a3a; }
+.xmas-tile.is-on .xmas-tile-switch i { transform: translateX(11px); }
+:root[data-theme="dark"] .xmas-tile { border-color: rgba(214, 120, 120, 0.35); background: linear-gradient(135deg, rgba(158, 47, 53, 0.22), rgba(47, 74, 58, 0.2)); }
+:root[data-theme="dark"] .xmas-tile-icon { color: #e09a9a; }
+:root[data-theme="dark"] .xmas-tile.is-on .xmas-tile-icon { color: #a9c7b2; }
+
+/* Holly by the name: only with the look on. */
+.xmas-holly-slot { display: none; }
+html[data-xmas="on"] .xmas-holly-slot { display: inline-flex; align-items: center; margin-left: 6px; translate: 0 -1px; }
+.xmas-holly { width: 22px; height: auto; }
+
+/* Fairy lights along the top of the sidebar: only with the look on. They get
+   their own strip above the name (the head moves down to make room), so no
+   bulb ever sits on a word. */
+.xmas-lights-slot { display: none; }
+html[data-xmas="on"] .xmas-lights-slot {
+  display: block; position: absolute; left: 6px; right: 6px; top: 0; height: 18px;
+  pointer-events: none; z-index: 2;
+}
+html[data-xmas="on"] .nl-nav-head { margin-top: 12px; }
+html[data-xmas="on"] .xmas-lights-slot + .flex.h-9 { margin-top: 12px; }
+.xmas-lights { display: block; width: 100%; height: 18px; overflow: visible; }
+.xmas-glow { opacity: 0.28; filter: blur(2px); }
+.xmas-bulb { animation: xmas-twinkle 2.6s ease-in-out infinite; }
+.xmas-lights.is-still .xmas-bulb { animation: none; }
+@keyframes xmas-twinkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+/* The snowy garland in the dashboard's top margin. The page's own padding is
+   the room it hangs in, so it never covers the title. */
+html[data-xmas="on"] main[data-os-content] { position: relative; }
+.xmas-garland {
+  position: absolute; left: 0; right: 0; top: -6px; height: 0; pointer-events: none; z-index: 1;
+}
+.xmas-garland svg { display: block; overflow: visible; filter: drop-shadow(0 3px 3px rgba(30, 40, 30, 0.16)); }
+:root[data-theme="dark"] .xmas-garland svg { filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.5)); }
+
+/* Snow: over the page, under Steve and every dialog, never in the way of a click. */
+.xmas-snow { position: fixed; inset: 0; z-index: 40; pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .xmas-bulb, .sorb.is-christmas.is-hover .xmas-hat { animation: none !important; }
+}
+
+/* ── Christmas colours (James, 26 Nov 2026) ─────────────────────────────────
+   "If they do decide to turn on Christmas mode, we will also change the
+   navigation bar colours and the background colours so we can see the snow
+   ... both a lighter theme and a darker theme, both in the Christmas
+   colours ... twinkling lights in the dark mode."
+   Only with html[data-xmas="on"], which the person's own tile sets, so
+   nobody else's screen changes. The light version: a deep pine sidebar, the
+   page left white, pine buttons, berry accents. The dark version: a midnight-pine page, gold buttons, and fairy lights lit
+   along the garland. `:root:root` outranks the sidebar's own colour choices
+   (linen, sage, clay) without !important. */
+
+/* The sidebar, both versions: deep pine, cream words, a berry marker. */
+:root:root[data-xmas="on"] [data-nav-look="new"] {
+  --nv-bg: #1d3b2c; --nv-line: rgba(246, 239, 226, 0.14); --nv-ink: #f6efe2; --nv-muted: #c5d3c6; --nv-faint: #9db3a2;
+  --nv-hover: rgba(246, 239, 226, 0.08); --nv-on: #2b5540; --nv-count: #ffb4ab; --nv-avatar: #2b5540; --nv-sel-edge: #e5484d;
+}
+:root:root[data-xmas="on"][data-theme="dark"] [data-nav-look="new"] {
+  --nv-bg: #0d1c15; --nv-line: rgba(246, 239, 226, 0.1); --nv-on: #1b3527; --nv-avatar: #1b3527;
+  --nv-page: #0f1713;
+}
+/* The selected row keeps its marker in the dark version too. */
+:root:root[data-xmas="on"] [data-nav-look="new"] .nl-nav-item.is-on svg { color: #ff8f88; }
+
+/* Pages, light version: the page stays white, as it was. A cream page went
+   the same day (James: "it looks a bit weird ... keep the background white,
+   or whatever colour it was before"). Only the buttons and accents change:
+   pine buttons, berry accents. */
+:root[data-xmas="on"]:not([data-theme="dark"]) [data-look="new"] {
+  --primary: #244a36; --on-primary: #ffffff;
+  --accent: #a3262f; --accent-dark: #a3262f; --accent-soft: #f4e2de;
+  --sage-deep: #2c5a40; --sage-ink: #2c5a40; --sage-soft: #e3ecdc;
+}
+/* Dark version: midnight pine, gold buttons, soft berry accents. */
+:root[data-xmas="on"][data-theme="dark"] [data-look="new"] {
+  --page: #0f1713; --card: #16221b; --panel: #19271f; --box: #223328;
+  --line: #2a3b31; --line-strong: #3b5044;
+  --primary: #e2bd6e; --on-primary: #14130f;
+  --accent: #ee8a84; --accent-dark: #f4aaa4; --accent-soft: #3a2123;
+  --sage-deep: #9ccaa6; --sage-ink: #9ccaa6; --sage-soft: #1c2f24;
+}
+
+/* The tile on the pine sidebar. */
+:root[data-xmas="on"] .xmas-tile { border-color: rgba(246, 239, 226, 0.28); background: rgba(246, 239, 226, 0.08); }
+:root[data-xmas="on"] .xmas-tile:hover { border-color: rgba(246, 239, 226, 0.5); background: rgba(246, 239, 226, 0.13); }
+:root[data-xmas="on"] .xmas-tile .xmas-tile-icon,
+:root[data-xmas="on"] .xmas-tile.is-on .xmas-tile-icon { color: #f2c14e; }
+:root[data-xmas="on"] .xmas-tile.is-on .xmas-tile-switch { background: #c9353b; }
+:root[data-xmas="on"] .xmas-tile:focus-visible { outline-color: #f2c14e; }
+
+/* Fairy lights wound along the garland: lit in the dark version only. */
+.xmas-glights { display: none; }
+:root[data-xmas="on"][data-theme="dark"] .xmas-glights { display: inline; }
+.xmas-glight { animation: xmas-glint 2.6s ease-in-out infinite; }
+.xmas-glight-halo { opacity: 0.5; filter: blur(2.6px); }
+@keyframes xmas-glint { 0%, 100% { opacity: 1; } 42% { opacity: 0.22; } 60% { opacity: 0.85; } }
+@media (prefers-reduced-motion: reduce) { .xmas-glight { animation: none !important; } }
+/* The sidebar's own string glows more at night. */
+:root[data-xmas="on"][data-theme="dark"] .xmas-glow { opacity: 0.5; }
+
+/* The name at the sidebar's foot and its menu take the page's ink by default: on pine they need the sidebar's. */
+:root[data-xmas="on"] [data-nav-look="new"] .nl-nav-me .text-ink { color: var(--nv-ink); }
+:root[data-xmas="on"] [data-nav-look="new"] .nl-nav-me svg { color: var(--nv-faint); }
+:root[data-xmas="on"] [data-nav-look="new"] [data-os-profile-menu] { background: #24493a; border-color: rgba(246, 239, 226, 0.18); }
+:root[data-xmas="on"][data-theme="dark"] [data-nav-look="new"] [data-os-profile-menu] { background: #15281e; }
