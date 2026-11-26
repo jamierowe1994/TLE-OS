@@ -1,7 +1,7 @@
 /* ── The Christmas look (lib/christmas, components/christmas/Decor, 26 Nov 2026) ──
    Steve's hat shows whenever the "christmas" switch is on in the season; the
    rest only with html[data-xmas="on"], which the person's own tile sets.
-   Nothing here sits over a control: the snow and bunting take no pointer. */
+   Nothing here sits over a control: the snow and the garland take no pointer. */
 
 /* Steve's hat: on top of his head, a little forward, tipped to his left. */
 .sorb.is-christmas { overflow: visible; }
@@ -67,21 +67,18 @@ html[data-xmas="on"] .xmas-lights-slot + .flex.h-9 { margin-top: 12px; }
 .xmas-lights.is-still .xmas-bulb { animation: none; }
 @keyframes xmas-twinkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
-/* Bunting in the dashboard's top margin. The page's own padding is the room it
-   hangs in, so it never covers the title. */
+/* The snowy garland in the dashboard's top margin. The page's own padding is
+   the room it hangs in, so it never covers the title. */
 html[data-xmas="on"] main[data-os-content] { position: relative; }
-.xmas-bunting {
-  position: absolute; left: 0; right: 0; top: 0; height: 0; pointer-events: none; z-index: 1;
-  padding-inline: 18px;
+.xmas-garland {
+  position: absolute; left: 0; right: 0; top: -6px; height: 0; pointer-events: none; z-index: 1;
 }
-.xmas-bunting svg { display: block; overflow: visible; }
-.xmas-flag { transform-box: fill-box; transform-origin: 50% 0; animation: xmas-sway 5.5s ease-in-out infinite; }
-.xmas-bunting.is-still .xmas-flag { animation: none; }
-@keyframes xmas-sway { 0%, 100% { rotate: -3deg; } 50% { rotate: 3deg; } }
+.xmas-garland svg { display: block; overflow: visible; filter: drop-shadow(0 3px 3px rgba(30, 40, 30, 0.16)); }
+:root[data-theme="dark"] .xmas-garland svg { filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.5)); }
 
 /* Snow: over the page, under Steve and every dialog, never in the way of a click. */
 .xmas-snow { position: fixed; inset: 0; z-index: 40; pointer-events: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .xmas-bulb, .xmas-flag, .sorb.is-christmas.is-hover .xmas-hat { animation: none !important; }
+  .xmas-bulb, .sorb.is-christmas.is-hover .xmas-hat { animation: none !important; }
 }

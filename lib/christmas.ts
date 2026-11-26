@@ -19,8 +19,9 @@ import { usePref } from "@/lib/prefs-store";
  *     November is in the window so James can see it on Only me before the 1st;
  *     6 January (Twelfth Night) is the last day, so nobody has to remember to
  *     take the decorations down.
- *   - the LOOK: what a person chose with the tile (snow, bunting, holly,
- *     fairy lights). Off until they press it; kept in their prefs, so it
+ *   - the LOOK: what a person chose with the tile (snow, a snowy pine
+ *     garland in place of the bunting James first had, holly, fairy lights).
+ *     Off until they press it; kept in their prefs, so it
  *     follows them to another computer.
  */
 
