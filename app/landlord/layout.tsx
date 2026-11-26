@@ -64,9 +64,65 @@ export default async function LandlordLayout({ children }: { children: React.Rea
   const places = me ? await landlordPlaces(me).catch(() => []) : [];
   /* The house style, behind the "portals" switch (lib/portal-look; app/portal-edge.css). */
   const look = await portalLookOn();
+  /* ON, the landlord's portal draws in its own calm skin (James, 26 Nov 2026:
+     "rebrand that with the website in mind... this minimalistic style... a
+     little bit easier to follow but also has better theming"). It is stamped
+     "calm", not "new", so the house style's rules (app/portal-edge.css, which
+     the tenant's portal still wears) do not reach it; everything it needs is in
+     app/landlord-calm.css. No sidebar: one bar across the top, as the website
+     has, and the page in a centred column under it. The phone keeps its drawer. */
+  if (look) {
+    return (
+      <div data-portal-look="calm" className="contents">
+        <PortalLookPin on as="calm" />
+        <PhoneShell signedIn={Boolean(me)} letHere={letHere} places={places} signOut={<LandlordSignOut variant="drawer" />}>
+          <div data-surface="landlord" id="top" className="llc">
+            <header className="llc-bar">
+              <Link href="/landlord" className="llc-logo" aria-label="The Letting Experts, home" data-tle-logo>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/brand/tle-logo.png" alt="The Letting Experts" />
+              </Link>
+              <Suspense fallback={<span className="llc-nav" />}>
+                <SideNav variant="top" letHere={letHere} />
+              </Suspense>
+              <div className="llc-find">
+                <FileSearch />
+              </div>
+              <div className="llc-me">
+                {me ? (
+                  <>
+                    <Link href="/landlord/profile" className="llc-who" title="My details">
+                      <span className="llc-initial">{initial}</span>
+                      <span className="llc-name">{me.name}</span>
+                    </Link>
+                    <LandlordSignOut />
+                  </>
+                ) : (
+                  <Link href="/landlord/sign-in" className="llc-signin">Sign in</Link>
+                )}
+              </div>
+              <div className="llc-burger">
+                <PhoneNavButton />
+              </div>
+            </header>
+            <main className="llc-main">{children}</main>
+            <footer className="llc-foot">
+              <span>The Letting Experts · thelettingexperts.co.uk</span>
+              <span className="llc-foot-links">
+                <a href="https://thelettingexperts.co.uk/privacy-policy" target="_blank" rel="noreferrer">Privacy and your data</a>
+                <a href="https://thelettingexperts.co.uk/contact-us" target="_blank" rel="noreferrer">Contact us</a>
+                <a href="https://thelettingexperts.co.uk/complaints-handling" target="_blank" rel="noreferrer">Complaints</a>
+              </span>
+            </footer>
+            <PreviewReturnBar />
+          </div>
+        </PhoneShell>
+      </div>
+    );
+  }
   return (
-    <div data-portal-look={look ? "new" : undefined} className="contents">
-    <PortalLookPin on={look} />
+    <div className="contents">
+    <PortalLookPin on={false} />
     <PhoneShell
       signedIn={Boolean(me)}
       letHere={letHere}

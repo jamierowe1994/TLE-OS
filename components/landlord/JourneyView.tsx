@@ -7,6 +7,9 @@ import SpinePhone from "@/components/landlord/SpinePhone";
 import { HeroAction, StepRow, pickHero } from "@/components/landlord/StepAction";
 import { STAGE_COPY, fullJourney, type Stop } from "@/lib/landlord-journey";
 import type { LandlordView } from "@/lib/landlord-view";
+import { SHORT, TITLE } from "@/components/landlord/journey-words";
+import JourneyViewCalm from "@/components/landlord/JourneyViewCalm";
+import { portalLookOn } from "@/lib/portal-look";
 
 /**
  * The journey page (James's mock, 11 Sep 2026), in the home page's language.
@@ -26,34 +29,15 @@ const eyebrow = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-mu
 const SAGE_INK = "#56634a";
 const SAGE_WASH = "#f1f4ec";
 
-/**
- * The same stage in one word, for a phone. James, 15 Sep 2026: "get rid of the
- * icon ... and then just say Current Stage, or instead of Current Stage, maybe
- * Signing." A 30px "Signing your instruction" over a 64px icon is most of a
- * phone screen spent saying where they are before anything says what to do.
- */
-const SHORT: Record<string, string> = {
-  valuation: "Valuation",
-  instruction: "Signing",
-  compliance: "Compliance",
-  marketing: "Marketing",
-  viewings: "Viewings",
-  let: "Let agreed",
-  management: "Managed",
-};
+type JourneyViewProps = { view: LandlordView; homeHref: string };
 
-/** The current-stage card's title, in words that read as a sentence. */
-const TITLE: Record<string, string> = {
-  valuation: "Valuation in progress",
-  instruction: "Signing your instruction",
-  compliance: "Compliance in progress",
-  marketing: "Marketing your property",
-  viewings: "Viewings and offers",
-  let: "Let agreed, moving in soon",
-  management: "Your property is managed",
-};
+/* The "portals" switch decides which page is drawn: on, the calm one (JourneyViewCalm,
+   26 Nov 2026); off, this file's own, exactly as it was. */
+export default async function JourneyView(props: JourneyViewProps) {
+  return (await portalLookOn()) ? <JourneyViewCalm {...props} /> : <ClassicJourneyView {...props} />;
+}
 
-export default function JourneyView({ view: v, homeHref }: { view: LandlordView; homeHref: string }) {
+function ClassicJourneyView({ view: v, homeHref }: { view: LandlordView; homeHref: string }) {
   const stops = fullJourney(v);
   const current = stops.find((s) => s.state === "current") ?? stops[stops.length - 1];
   const copy = STAGE_COPY[current.id] ?? STAGE_COPY.valuation;

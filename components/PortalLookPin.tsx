@@ -13,7 +13,9 @@ import { useRouter } from "next/navigation";
  */
 const PIN = "os-portal-look";
 
-export default function PortalLookPin({ on }: { on: boolean }) {
+/* `as` is the name stamped on <html>: "new" is the house style (app/portal-edge.css);
+   the landlord portal passes "calm" for its own skin (app/landlord-calm.css). */
+export default function PortalLookPin({ on, as = "new" }: { on: boolean; as?: string }) {
   const router = useRouter();
 
   useEffect(() => {
@@ -31,10 +33,10 @@ export default function PortalLookPin({ on }: { on: boolean }) {
 
   useEffect(() => {
     const root = document.documentElement;
-    if (on) root.setAttribute("data-portal-look", "new");
+    if (on) root.setAttribute("data-portal-look", as);
     else root.removeAttribute("data-portal-look");
     return () => root.removeAttribute("data-portal-look");
-  }, [on]);
+  }, [on, as]);
 
   return null;
 }

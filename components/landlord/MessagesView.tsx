@@ -1,6 +1,8 @@
 import DoodleIcon from "@/components/DoodleIcon";
 import Thread from "@/components/landlord/Thread";
 import type { LandlordView } from "@/lib/landlord-view";
+import MessagesViewCalm from "@/components/landlord/MessagesViewCalm";
+import { portalLookOn } from "@/lib/portal-look";
 
 /**
  * The Messages page (12 Sep 2026), in the home page's language.
@@ -18,7 +20,15 @@ const eyebrow = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-mu
 const SAGE_INK = "#56634a";
 const SAGE_WASH = "#f1f4ec";
 
-export default function MessagesView({ view: v, sample = false }: { view: LandlordView; sample?: boolean }) {
+type MessagesViewProps = { view: LandlordView; sample?: boolean };
+
+/* The "portals" switch decides which page is drawn: on, the calm one (MessagesViewCalm,
+   26 Nov 2026); off, this file's own, exactly as it was. */
+export default async function MessagesView(props: MessagesViewProps) {
+  return (await portalLookOn()) ? <MessagesViewCalm {...props} /> : <ClassicMessagesView {...props} />;
+}
+
+function ClassicMessagesView({ view: v, sample = false }: { view: LandlordView; sample?: boolean }) {
   const agent = v.agent;
   const first = agent?.name.split(/\s+/)[0] ?? "your agent";
   const messages = v.messages ?? [];
