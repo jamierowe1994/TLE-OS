@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import DoodleIcon from "@/components/DoodleIcon";
 
 /**
@@ -448,6 +449,14 @@ export function AccessComposer({
 
 /* ── a sheet over the drawer ───────────────────────────────────────────── */
 
+/* Drawn on the page itself, not inside the listing (Dan Richards, ticket
+   f7c64d60, 27 Nov 2026: Ask the tenant for access opened behind the sidebar,
+   cut off on the left - the same fault as ticket 3ebc8060 on 8 Nov). Fixing
+   the one animation that held a transform was not enough: anything on the
+   listing that holds a transform, filter or will-change makes itself the
+   frame for a `fixed` sheet inside it. Portalled to the body, as the advert
+   and offer sheets are, nothing on the page can trap it again. */
+
 export function AccessSheet({ title, wide, children, onClose }: { title: string; wide?: boolean; children: React.ReactNode; onClose: () => void }) {
   const [shown, setShown] = useState(false);
   useEffect(() => {
@@ -464,7 +473,7 @@ export function AccessSheet({ title, wide, children, onClose }: { title: string;
       window.removeEventListener("keydown", onKey, true);
     };
   }, [onClose]);
-  return (
+  const sheet = (
     <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 sm:p-8">
       <button type="button" aria-label="Close" onClick={onClose} className={`absolute inset-0 cursor-default bg-ink/40 transition-opacity duration-500 ${shown ? "opacity-100" : "opacity-0"}`} />
       <div
@@ -484,4 +493,5 @@ export function AccessSheet({ title, wide, children, onClose }: { title: string;
       </div>
     </div>
   );
+  return typeof document === "undefined" ? null : createPortal(sheet, document.body);
 }
