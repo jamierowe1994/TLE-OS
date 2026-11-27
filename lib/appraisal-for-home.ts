@@ -265,8 +265,8 @@ async function papersOf(a: HomeAppraisal): Promise<AppraisalPaper[]> {
       : Promise.resolve([]),
     /* The landlord's own uploads: those made against this appraisal, and
        their ID and ownership papers from the portal, which are theirs, not one home's. */
-    q<{ id: string; kind: string; name: string; r2_key: string; uploaded_at: Date }>(
-      `SELECT d.id, d.kind, d.name, d.r2_key, d.uploaded_at
+    q<{ id: string; kind: string; name: string; r2_key: string; uploaded_at: Date; via: string | null }>(
+      `SELECT d.id, d.kind, d.name, d.r2_key, d.uploaded_at, COALESCE(d.via, CASE WHEN d.address IS NOT NULL THEN 'sign' END) AS via
          FROM os_landlord_documents d
          LEFT JOIN os_portal_accounts p ON p.id = d.account_id
         WHERE d.appraisal_id = $1
@@ -295,7 +295,7 @@ async function papersOf(a: HomeAppraisal): Promise<AppraisalPaper[]> {
   }
   for (const d of portal) {
     const type = PORTAL_KIND_TYPE[d.kind] ?? "other";
-    out.push({ key: `portal:${d.id}`, type, label: type === "other" ? "From the landlord" : labelOf(type, d.kind), name: d.name || "Document", at: iso(d.uploaded_at), how: "Sent through the landlord portal", r2Key: d.r2_key });
+    out.push({ key: `portal:${d.id}`, type, label: type === "other" ? "From the landlord" : labelOf(type, d.kind), name: d.name || "Document", at: iso(d.uploaded_at), how: d.via === "sign" ? "Sent while signing the terms" : "Sent through the landlord portal", r2Key: d.r2_key });
   }
   for (const d of signed) {
     out.push({

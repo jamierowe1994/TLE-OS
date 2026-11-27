@@ -878,6 +878,10 @@ export async function recordLandlordDocument(d: {
   r2Key: string;
   bytes: number;
   contentType: string;
+  /** How it arrived: their portal, the phone QR, or the link they sign their terms on. */
+  via?: "portal" | "handoff" | "sign";
+  /** The home it is for, when there is no appraisal to say so (terms sent from a listing). */
+  home?: { propertyId: string | null; address: string; agent: string };
 }): Promise<LandlordDocument> {
   const rows = await q<DocRow>(
     `INSERT INTO os_landlord_documents (id, account_id, appraisal_id, kind, name, r2_key, bytes, content_type)
@@ -885,6 +889,14 @@ export async function recordLandlordDocument(d: {
      RETURNING id, account_id, appraisal_id, kind, name, r2_key, bytes, content_type, uploaded_at`,
     [uid(), d.accountId, d.appraisalId, d.kind, d.name, d.r2Key, d.bytes, d.contentType]
   );
+  /* Written after the row, each on its own and never fatal: the file is already stored, and a
+     label must not be the reason a landlord's upload is refused. Done here, per file, so every
+     page of a send that could not be bound into one PDF carries its home (it used to be only
+     the last). */
+  if (d.home) {
+    await q(`UPDATE os_landlord_documents SET property_id = $2, address = $3, agent = $4 WHERE id = $1`, [rows[0].id, d.home.propertyId, d.home.address, d.home.agent]).catch(() => null);
+  }
+  if (d.via) await q(`UPDATE os_landlord_documents SET via = $2 WHERE id = $1`, [rows[0].id, d.via]).catch(() => null);
   return docShape(rows[0]);
 }
 

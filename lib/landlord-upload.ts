@@ -43,6 +43,7 @@ export async function storeLandlordPages(d: {
   files: File[];
   label?: string;
   via?: "portal" | "handoff" | "sign";
+  home?: { propertyId: string | null; address: string; agent: string };
 }): Promise<StoreResult> {
   const files = d.files.filter((f) => f instanceof File && f.size > 0);
   if (files.length === 0) return { ok: false, status: 400, error: "No file was attached." };
@@ -76,6 +77,8 @@ export async function storeLandlordDocument(d: {
   file: File;
   /** How it arrived, for the object's own metadata: a session, or a QR. */
   via?: "portal" | "handoff" | "sign";
+  /** The home it is for, when no appraisal says so (terms sent from a listing). */
+  home?: { propertyId: string | null; address: string; agent: string };
 }): Promise<StoreResult> {
   if (!hasDb()) return { ok: false, status: 503, error: "No database on this environment." };
   if (!r2Configured) {
@@ -125,6 +128,8 @@ export async function storeLandlordDocument(d: {
     r2Key: key,
     bytes: file.size,
     contentType: judged.type,
+    via: d.via ?? "portal",
+    home: d.home,
   });
   return { ok: true, document };
 }

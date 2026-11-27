@@ -632,14 +632,16 @@ export async function uploadByToken(token: string, kindRaw: string, files: File[
   const account =
     (await landlordAccountByEmail(party.email)) ??
     (await upsertLandlordAccount({ email: party.email.trim().toLowerCase(), name: party.name, contactIds: [], properties: [], appraisals: [] }));
-  const out = await storeLandlordPages({ accountId: account.id, appraisalId: terms.appraisalId ?? null, kind: kindRaw, files, label, via: "sign" });
+  const out = await storeLandlordPages({
+    accountId: account.id,
+    appraisalId: terms.appraisalId ?? null,
+    kind: kindRaw,
+    files,
+    label,
+    via: "sign",
+    home: { propertyId: terms.propertyId ?? null, address: terms.propertyAddress, agent: terms.agentName },
+  });
   if (!out.ok) throw new TermsRefused(out.error);
-  await q(`UPDATE os_landlord_documents SET property_id = $2, address = $3, agent = $4 WHERE id = $1`, [
-    out.document.id,
-    terms.propertyId ?? null,
-    terms.propertyAddress,
-    terms.agentName,
-  ]).catch(() => null);
   return { kind: kindRaw, name: out.document.name };
 }
 

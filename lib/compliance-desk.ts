@@ -131,6 +131,13 @@ export interface VerifyItem {
 const ymd = (v: unknown) => (v ? (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10)) : null);
 const isoOf = (v: unknown) => new Date(v as string).toISOString();
 
+/* Where a landlord's own file came in (27 Nov 2026). The desk said "uploaded in the landlord
+   portal" for a certificate sent from the link they sign their terms on, which is not where it
+   came from. Rows from the one day before `via` was kept are told apart by the address on the
+   row: only the signing link writes one. */
+const LANDLORD_VIA = `COALESCE(d.via, CASE WHEN d.address IS NOT NULL THEN 'sign' END)`;
+const landlordSource = (via: unknown) => (via === "sign" ? "uploaded while signing the terms" : "uploaded in the landlord portal");
+
 function doorOf(source: string): VerifyItem["door"] {
   const s = source.toLowerCase();
   /* Filed on REX (or REX PM) and picked up by the OS - see feedRexRenewals. */
@@ -166,7 +173,7 @@ export async function verifyQueue(): Promise<VerifyItem[]> {
       [CHECKS_BEGAN]
     ),
     q<Record<string, unknown>>(
-      `SELECT d.id, d.kind AS type_raw, d.kind, d.name, d.r2_key, d.uploaded_at, a.name AS landlord, COALESCE(m.address, d.address) AS address, m.postcode, COALESCE(m.agent, d.agent) AS agent,
+      `SELECT d.id, d.kind AS type_raw, d.kind, d.name, d.r2_key, d.uploaded_at, a.name AS landlord, COALESCE(m.address, d.address) AS address, m.postcode, COALESCE(m.agent, d.agent) AS agent, ${LANDLORD_VIA} AS via,
               k.state, k.note, k.by_name, k.at AS checked_at, k.told, k.told_at, tu.name AS told_name
          FROM os_landlord_documents d
          JOIN os_portal_accounts a ON a.id = d.account_id
@@ -224,7 +231,7 @@ export async function verifyQueue(): Promise<VerifyItem[]> {
       fileName: String(r.name ?? ""),
       fileKey: String(r.r2_key ?? ""),
       by: String(r.landlord ?? "") || "The landlord",
-      source: "uploaded in the landlord portal",
+      source: landlordSource(r.via),
       agent: r.agent ? String(r.agent) : null,
       addedAt: isoOf(r.uploaded_at),
       queried: queried(r),
@@ -346,7 +353,7 @@ const LANDLORD_CERT_TYPES: Record<string, { id: string; label: string }[]> = {
  */
 async function fileLandlordCertificate(p: { id: string; type: string; expiry: string; issue?: string | null; by: string }): Promise<string> {
   const rows = await q<Record<string, unknown>>(
-    `SELECT d.id, d.kind, d.name, d.r2_key, d.content_type, d.certificate_id, a.name AS landlord, COALESCE(m.address, d.address) AS address, m.postcode, COALESCE(m.rex_property_id, d.property_id) AS rex_property_id
+    `SELECT d.id, d.kind, d.name, d.r2_key, d.content_type, d.certificate_id, a.name AS landlord, COALESCE(m.address, d.address) AS address, m.postcode, COALESCE(m.rex_property_id, d.property_id) AS rex_property_id, ${LANDLORD_VIA} AS via
        FROM os_landlord_documents d
        JOIN os_portal_accounts a ON a.id = d.account_id
        LEFT JOIN os_market_appraisals m ON m.id = d.appraisal_id
@@ -377,7 +384,8 @@ async function fileLandlordCertificate(p: { id: string; type: string; expiry: st
     type: p.type,
     expiry: p.expiry,
     issue: p.issue || null,
-    source: "uploaded in the landlord portal",
+    /* Kept on the certificate. It names the landlord either way: doorOf reads that word. */
+    source: d.via === "sign" ? "uploaded by the landlord while signing the terms" : "uploaded in the landlord portal",
     by: String(d.landlord ?? "") || "The landlord",
     checkedBy: p.by,
   });

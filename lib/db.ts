@@ -4306,6 +4306,9 @@ ALTER TABLE os_landlord_documents ADD COLUMN IF NOT EXISTS certificate_id TEXT;
 ALTER TABLE os_landlord_documents ADD COLUMN IF NOT EXISTS property_id TEXT;
 ALTER TABLE os_landlord_documents ADD COLUMN IF NOT EXISTS address TEXT;
 ALTER TABLE os_landlord_documents ADD COLUMN IF NOT EXISTS agent TEXT;
+-- How it arrived (27 Nov 2026): 'portal', 'handoff' (the phone QR) or 'sign' (the signing link), so
+-- the compliance desk can say where a landlord's file came from. Empty on rows from before.
+ALTER TABLE os_landlord_documents ADD COLUMN IF NOT EXISTS via TEXT;
 
 -- ── AND THE TENANT'S, added 15 Sep 2026 ──────────────────────────────────
 --
